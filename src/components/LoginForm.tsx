@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { getCsrfToken, signIn } from "next-auth/react";
 import { FormEvent, useState } from "react";
 import Swal from "sweetalert2";
 
@@ -10,6 +10,7 @@ export default function LoginForm() {
   // const [name, setName] = useState("")
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const router = useRouter();
 
@@ -36,6 +37,43 @@ export default function LoginForm() {
     }).then(() => {
       router.push("/");
     });
+  }
+
+  async function handleGoogleLogin() {
+    try {
+      setIsGoogleLoading(true);
+      const csrfToken = await getCsrfToken();
+
+      if (!csrfToken) {
+        throw new Error("Missing CSRF token");
+      }
+
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = "/api/auth/signin/google";
+
+      const csrfInput = document.createElement("input");
+      csrfInput.type = "hidden";
+      csrfInput.name = "csrfToken";
+      csrfInput.value = csrfToken;
+      form.appendChild(csrfInput);
+
+      const callbackInput = document.createElement("input");
+      callbackInput.type = "hidden";
+      callbackInput.name = "callbackUrl";
+      callbackInput.value = "/";
+      form.appendChild(callbackInput);
+
+      document.body.appendChild(form);
+      form.submit();
+    } catch {
+      setIsGoogleLoading(false);
+      Swal.fire({
+        icon: "error",
+        title: "Google Login Failed",
+        text: "Unable to start Google login. Please try again.",
+      });
+    }
   }
 
   return (
@@ -81,8 +119,16 @@ export default function LoginForm() {
             <hr className="flex-1 border-gray-300" />
           </div>
 
-          {/* kalau mau login pake google */}
-          <div className="flex justify-center"></div>
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              disabled={isGoogleLoading}
+              className="w-full border border-gray-300 text-gray-700 py-2 rounded-lg font-semibold hover:bg-gray-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {isGoogleLoading ? "Redirecting..." : "Continue with Google"}
+            </button>
+          </div>
         </form>
 
         <p className="text-center text-gray-600 text-sm mt-6">
