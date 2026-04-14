@@ -13,6 +13,10 @@ export interface IUserBooking {
   videoCallUrl?: string | null;
   isPaid: boolean;
   isDone: boolean;
+  googleCalendarEventId?: string;
+  googleCalendarEventLink?: string;
+  googleCalendarSyncStatus?: "pending" | "success" | "failed";
+  googleCalendarSyncError?: string;
   reminderSent: boolean;
   createdAt: Date;
 }
@@ -133,6 +137,40 @@ export default class UserBooking {
         $set: {
           isPaid,
         },
+      },
+    );
+
+    return result;
+  }
+
+  static async updateBookingCalendarSync(
+    bookingId: string,
+    payload: {
+      eventId?: string;
+      eventLink?: string;
+      status: "pending" | "success" | "failed";
+      error?: string;
+    },
+  ) {
+    const collection = await this.getCollection();
+
+    const setPayload: Partial<IUserBooking> = {
+      googleCalendarSyncStatus: payload.status,
+      googleCalendarSyncError: payload.error,
+    };
+
+    if (payload.eventId) {
+      setPayload.googleCalendarEventId = payload.eventId;
+    }
+
+    if (payload.eventLink) {
+      setPayload.googleCalendarEventLink = payload.eventLink;
+    }
+
+    const result = await collection.updateOne(
+      { _id: toObjectId(bookingId) },
+      {
+        $set: setPayload,
       },
     );
 
