@@ -9,6 +9,14 @@ export interface IFormBrief {
   user?: IUser;
   brief: string;
   result: string;
+  notes?: INote[];
+  createdAt: Date;
+}
+
+interface INote {
+  staffId: ObjectId;
+  staff?: IUser;
+  content: string;
   createdAt: Date;
 }
 
@@ -71,4 +79,17 @@ export default class FormBrief {
 
     return (results[0] as IFormBrief) || null;
   }
+
+  static async addNoteToFormBrief(formBriefId: string, note: INote): Promise<string> {
+    const collection = await this.getCollection();
+    const result = await collection.updateOne(
+      { _id: new ObjectId(formBriefId) },
+      { $push: { notes: note } }
+    );
+    if (!result.matchedCount) {
+      throw new NotFoundError("Form brief not found");
+    }
+    return "Note added successfully";
+  }
+
 }
