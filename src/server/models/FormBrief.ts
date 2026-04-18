@@ -52,7 +52,15 @@ export default class FormBrief {
             as: "user",
           },
         },
-        { $unwind: "$user" },
+        {
+          $lookup: {
+            from: "Users",
+            localField: "notes.staffId",
+            foreignField: "_id",
+            as: "notes.staff",
+          },
+        },
+        { $unwind: "$user, $notes.staff" },
       ])
       .toArray()) as IFormBrief[];
     return formBriefs;
@@ -73,7 +81,16 @@ export default class FormBrief {
             as: "user",
           },
         },
+        {
+          $lookup: {
+            from: "Users",
+            localField: "notes.staffId",
+            foreignField: "_id",
+            as: "notes.staff",
+          },
+        },
         { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
+        { $unwind: { path: "$notes.staff"} },
       ])
       .toArray();
 
