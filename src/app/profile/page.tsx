@@ -11,6 +11,7 @@ type PsychiatristInfo = {
   mode?: string;
   speciality?: string[];
   imageUrl?: string;
+  imageId?: string;
   roleSpecialist?: string;
   scheduleDays?: string[];
   scheduleTimes?: string[];
@@ -474,8 +475,8 @@ export default function ProfileViewPage() {
                         {p.type === "chat-only"
                           ? "Chat"
                           : p.type === "videocall"
-                          ? "Video Call"
-                          : "Offline"}
+                            ? "Video Call"
+                            : "Offline"}
                       </span>
                       <span className="text-lg font-black text-blue-900">
                         {formatRupiah(p.price)}
