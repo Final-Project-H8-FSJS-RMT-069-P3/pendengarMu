@@ -33,7 +33,7 @@ export interface IOrder {
 export default class Order {
   static async getCollection() {
     const db = await getDB();
-    return db.collection<IOrder>("orders");
+    return db.collection<IOrder>("Orders");
   }
 
   static async createOrder(

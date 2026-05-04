@@ -146,12 +146,12 @@ export async function POST(req: Request) {
       throw new Error("Failed to get Midtrans token");
     }
     await db.collection("Orders").insertOne({
-      id: orderId,
-      bookingId: result.insertedId,
-      amount: bookingData.amount,
+     userId: session.user.id,
+      orderId,
+      bookingId:result.insertedId,
+      totalAmount: bookingData.amount,
       status: "pending",
-      snapToken: transaction.token,
-      createdAt: new Date(),
+      paymentToken: transaction.token,
     });
     return NextResponse.json(
       {
