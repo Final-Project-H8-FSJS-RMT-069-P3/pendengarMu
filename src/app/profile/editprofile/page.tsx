@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import Swal from "sweetalert2";
+import { FileUploaderRegular } from "@uploadcare/react-uploader";
 
 type PsychiatristInfo = {
   certificate?: string;
@@ -13,6 +14,7 @@ type PsychiatristInfo = {
   mode?: string;
   speciality?: string[];
   imageUrl?: string;
+  imageId?: string;
   roleSpecialist?: string;
   scheduleDays?: string[];
   scheduleTimes?: string[];
@@ -31,10 +33,7 @@ const TIMES = Array.from({ length: 8 }, (_, i) => {
   const h = 9 + i;
   return {
     value: `${String(h).padStart(2, "0")}:00`,
-    label: `${String(h).padStart(2, "0")}:00 – ${String(h).padStart(
-      2,
-      "0"
-    )}:50`,
+    label: `${String(h).padStart(2, "0")}:00 – ${String(h).padStart(2, "0")}:50`,
   };
 });
 
@@ -82,7 +81,6 @@ export default function ProfilePage() {
     {}
   );
   const [newSpeciality, setNewSpeciality] = useState("");
-  const [uploadingImage, setUploadingImage] = useState(false);
 
   useEffect(() => {
     async function fetchProfile() {
@@ -235,314 +233,99 @@ export default function ProfilePage() {
 
         body { background: var(--bg); font-family: 'Nunito', 'Segoe UI', sans-serif; color: var(--text-primary); }
 
-        .page-wrapper {
-          max-width: 780px;
-          margin: 0 auto;
-          padding: 36px 20px 60px;
-        }
+        .page-wrapper { max-width: 780px; margin: 0 auto; padding: 36px 20px 60px; }
 
-        /* ── Header ── */
-        .page-header {
-          display: flex;
-          align-items: center;
-          gap: 14px;
-          margin-bottom: 32px;
-        }
+        .page-header { display: flex; align-items: center; gap: 14px; margin-bottom: 32px; }
         .back-btn {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          font-size: 13px;
-          font-weight: 600;
-          color: var(--accent);
-          text-decoration: none;
-          padding: 6px 12px;
-          border-radius: 8px;
-          background: var(--accent-light);
-          transition: background .15s;
+          display: inline-flex; align-items: center; gap: 6px;
+          font-size: 13px; font-weight: 600; color: var(--accent);
+          text-decoration: none; padding: 6px 12px; border-radius: 8px;
+          background: var(--accent-light); transition: background .15s;
         }
         .back-btn:hover { background: var(--accent-soft); }
-        .page-title {
-          font-size: 26px;
-          font-weight: 800;
-          color: var(--text-primary);
-          letter-spacing: -.5px;
-        }
+        .page-title { font-size: 26px; font-weight: 800; color: var(--text-primary); letter-spacing: -.5px; }
 
-        /* ── Alerts ── */
         .alert {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 12px 16px;
-          border-radius: var(--radius-sm);
-          font-size: 14px;
-          font-weight: 600;
-          margin-bottom: 20px;
+          display: flex; align-items: center; gap: 10px;
+          padding: 12px 16px; border-radius: var(--radius-sm);
+          font-size: 14px; font-weight: 600; margin-bottom: 20px;
         }
         .alert-error { background: var(--danger-light); color: var(--danger); border: 1px solid #ffc5cf; }
         .alert-success { background: var(--success-light); color: var(--success); border: 1px solid #bbf7d0; }
 
-        /* ── Card ── */
         .section-card {
-          background: var(--surface);
-          border: 1px solid var(--border);
-          border-radius: var(--radius);
-          padding: 28px;
-          margin-bottom: 20px;
+          background: var(--surface); border: 1px solid var(--border);
+          border-radius: var(--radius); padding: 28px; margin-bottom: 20px;
           box-shadow: var(--shadow-sm);
         }
         .section-title {
-          font-size: 15px;
-          font-weight: 700;
-          color: var(--text-secondary);
-          text-transform: uppercase;
-          letter-spacing: .6px;
-          margin-bottom: 20px;
-          padding-bottom: 14px;
-          border-bottom: 1px solid var(--border);
+          font-size: 15px; font-weight: 700; color: var(--text-secondary);
+          text-transform: uppercase; letter-spacing: .6px; margin-bottom: 20px;
+          padding-bottom: 14px; border-bottom: 1px solid var(--border);
         }
 
-        /* ── Fields ── */
         .field-group { margin-bottom: 18px; }
         .field-group:last-child { margin-bottom: 0; }
-        .field-label {
-          display: block;
-          font-size: 13px;
-          font-weight: 700;
-          color: var(--text-secondary);
-          margin-bottom: 6px;
-          letter-spacing: .2px;
-        }
+        .field-label { display: block; font-size: 13px; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px; letter-spacing: .2px; }
         .field-input, .field-textarea {
-          width: 100%;
-          padding: 10px 14px;
-          border: 1.5px solid var(--border);
-          border-radius: var(--radius-sm);
-          font-size: 14px;
-          color: var(--text-primary);
-          background: var(--surface);
-          outline: none;
-          transition: border-color .15s, box-shadow .15s;
-          font-family: inherit;
+          width: 100%; padding: 10px 14px; border: 1.5px solid var(--border);
+          border-radius: var(--radius-sm); font-size: 14px; color: var(--text-primary);
+          background: var(--surface); outline: none;
+          transition: border-color .15s, box-shadow .15s; font-family: inherit;
         }
         .field-input:focus, .field-textarea:focus {
-          border-color: var(--border-focus);
-          box-shadow: 0 0 0 3px rgba(108,140,255,.12);
+          border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(108,140,255,.12);
         }
-        .field-input:disabled {
-          background: var(--surface-2);
-          color: var(--text-muted);
-          cursor: not-allowed;
-        }
+        .field-input:disabled { background: var(--surface-2); color: var(--text-muted); cursor: not-allowed; }
         .field-textarea { resize: vertical; min-height: 90px; }
 
-        /* ── 2-col grid ── */
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
         .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
-        @media (max-width: 560px) {
-          .grid-2, .grid-3 { grid-template-columns: 1fr; }
-        }
+        @media (max-width: 560px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
 
-        /* ── Package price cards ── */
-        .paket-card {
-          background: var(--surface-2);
-          border: 1.5px solid var(--border);
-          border-radius: var(--radius-sm);
-          padding: 14px;
-        }
-        .paket-icon {
-          font-size: 22px;
-          margin-bottom: 6px;
-        }
-        .paket-label {
-          font-size: 12px;
-          font-weight: 700;
-          color: var(--text-muted);
-          text-transform: uppercase;
-          letter-spacing: .5px;
-          margin-bottom: 8px;
-        }
+        .paket-card { background: var(--surface-2); border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 14px; }
+        .paket-icon { font-size: 22px; margin-bottom: 6px; }
+        .paket-label { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
 
-        /* ── Tag pills ── */
         .tags-wrapper { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-        .tag-pill {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          background: var(--tag-bg);
-          color: var(--tag-text);
-          font-size: 13px;
-          font-weight: 600;
-          padding: 5px 12px;
-          border-radius: 999px;
-        }
-        .tag-remove {
-          background: none;
-          border: none;
-          cursor: pointer;
-          font-size: 15px;
-          color: var(--danger);
-          line-height: 1;
-          display: flex;
-          align-items: center;
-          padding: 0;
-        }
-        .tag-add-row {
-          display: flex;
-          gap: 8px;
-          margin-top: 6px;
-        }
-        .tag-add-btn {
-          padding: 10px 18px;
-          background: var(--accent);
-          color: #fff;
-          border: none;
-          border-radius: var(--radius-sm);
-          font-size: 13px;
-          font-weight: 700;
-          cursor: pointer;
-          white-space: nowrap;
-          transition: background .15s;
-        }
+        .tag-pill { display: inline-flex; align-items: center; gap: 6px; background: var(--tag-bg); color: var(--tag-text); font-size: 13px; font-weight: 600; padding: 5px 12px; border-radius: 999px; }
+        .tag-remove { background: none; border: none; cursor: pointer; font-size: 15px; color: var(--danger); line-height: 1; display: flex; align-items: center; padding: 0; }
+        .tag-add-row { display: flex; gap: 8px; margin-top: 6px; }
+        .tag-add-btn { padding: 10px 18px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: background .15s; }
         .tag-add-btn:hover { background: var(--accent-hover); }
 
-        /* ── Day/Time toggles ── */
-        .toggle-grid-days {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 8px;
-          margin-top: 10px;
-        }
-        .toggle-grid-times {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 8px;
-          margin-top: 10px;
-        }
+        .toggle-grid-days { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+        .toggle-grid-times { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
         @media (max-width: 500px) {
           .toggle-grid-days { grid-template-columns: repeat(2, 1fr); }
           .toggle-grid-times { grid-template-columns: repeat(2, 1fr); }
         }
         .toggle-chip {
-          padding: 8px 4px;
-          text-align: center;
-          font-size: 13px;
-          font-weight: 700;
-          border: 1.5px solid var(--border);
-          border-radius: var(--radius-sm);
-          cursor: pointer;
-          transition: all .15s;
-          user-select: none;
-          color: var(--text-secondary);
-          background: var(--surface-2);
+          padding: 8px 4px; text-align: center; font-size: 13px; font-weight: 700;
+          border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+          cursor: pointer; transition: all .15s; user-select: none;
+          color: var(--text-secondary); background: var(--surface-2);
         }
         .toggle-chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
-        .toggle-chip.active {
-          background: var(--accent);
-          border-color: var(--accent);
-          color: #fff;
-          box-shadow: 0 2px 8px rgba(91,124,255,.30);
-        }
+        .toggle-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 2px 8px rgba(91,124,255,.30); }
 
-        /* ── Image upload ── */
-        .image-upload-row {
-          display: flex;
-          align-items: center;
-          gap: 20px;
-          margin-top: 6px;
-        }
-        .avatar-preview {
-          width: 80px;
-          height: 80px;
-          border-radius: 50%;
-          object-fit: cover;
-          border: 3px solid var(--accent-soft);
-          box-shadow: var(--shadow-sm);
-          flex-shrink: 0;
-        }
-        .avatar-placeholder {
-          width: 80px;
-          height: 80px;
-          border-radius: 50%;
-          background: var(--accent-light);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 28px;
-          flex-shrink: 0;
-        }
-        .file-upload-label {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 9px 16px;
-          background: var(--surface-2);
-          border: 1.5px dashed var(--border);
-          border-radius: var(--radius-sm);
-          font-size: 13px;
-          font-weight: 600;
-          color: var(--text-secondary);
-          cursor: pointer;
-          transition: border-color .15s, background .15s;
-        }
-        .file-upload-label:hover { border-color: var(--accent); background: var(--accent-light); color: var(--accent); }
-        .file-upload-label input[type="file"] { display: none; }
-        .uploading-badge {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          font-size: 12px;
-          color: var(--accent);
-          font-weight: 600;
-          margin-top: 6px;
-        }
+        .image-upload-row { display: flex; align-items: center; gap: 20px; margin-top: 6px; }
+        .avatar-preview { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid var(--accent-soft); box-shadow: var(--shadow-sm); flex-shrink: 0; }
+        .avatar-placeholder { width: 80px; height: 80px; border-radius: 50%; background: var(--accent-light); display: flex; align-items: center; justify-content: center; font-size: 28px; flex-shrink: 0; }
 
-        /* ── Submit ── */
-        .submit-bar {
-          display: flex;
-          justify-content: flex-end;
-          margin-top: 8px;
-        }
+        .submit-bar { display: flex; justify-content: flex-end; margin-top: 8px; }
         .submit-btn {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 12px 32px;
-          background: var(--accent);
-          color: #fff;
-          border: none;
-          border-radius: var(--radius-sm);
-          font-size: 15px;
-          font-weight: 700;
-          cursor: pointer;
-          box-shadow: 0 4px 14px rgba(91,124,255,.35);
-          transition: background .15s, transform .1s, box-shadow .15s;
-          letter-spacing: .2px;
+          display: inline-flex; align-items: center; gap: 8px;
+          padding: 12px 32px; background: var(--accent); color: #fff;
+          border: none; border-radius: var(--radius-sm); font-size: 15px;
+          font-weight: 700; cursor: pointer; box-shadow: 0 4px 14px rgba(91,124,255,.35);
+          transition: background .15s, transform .1s, box-shadow .15s; letter-spacing: .2px;
         }
         .submit-btn:hover { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(91,124,255,.40); }
         .submit-btn:active { transform: translateY(0); }
 
-        /* ── Loading ── */
-        .loading-screen {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          min-height: 300px;
-          gap: 16px;
-          color: var(--text-muted);
-          font-size: 14px;
-          font-weight: 600;
-        }
-        .spinner {
-          width: 36px;
-          height: 36px;
-          border: 3px solid var(--accent-soft);
-          border-top-color: var(--accent);
-          border-radius: 50%;
-          animation: spin .7s linear infinite;
-        }
+        .loading-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 300px; gap: 16px; color: var(--text-muted); font-size: 14px; font-weight: 600; }
+        .spinner { width: 36px; height: 36px; border: 3px solid var(--accent-soft); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
 
@@ -594,7 +377,6 @@ export default function ProfilePage() {
               </Field>
             </div>
           </SectionCard>
-
           {/* ── Psychiatrist Info ── */}
           {role === "psychiatrist" && (
             <>
@@ -797,78 +579,31 @@ export default function ProfilePage() {
                     <div className="avatar-placeholder">👤</div>
                   )}
                   <div>
-                    <label className="file-upload-label">
-                      📁 Pilih Gambar
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          setUploadingImage(true);
-                          try {
-                            const reader = new FileReader();
-                            const dataUrl: string = await new Promise(
-                              (resolve, reject) => {
-                                reader.onload = () =>
-                                  resolve(reader.result as string);
-                                reader.onerror = () =>
-                                  reject(new Error("Gagal membaca file"));
-                                reader.readAsDataURL(file);
-                              }
-                            );
-                            const res = await fetch("/api/auth/upload-image", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({
-                                filename: file.name,
-                                dataUrl,
-                              }),
-                            });
-                            const json = await res.json();
-                            if (!res.ok)
-                              throw new Error(json.message || "Upload gagal");
-                            setPsychiatristInfo((p) => ({
-                              ...p,
-                              imageUrl: json.url,
-                            }));
-                          } catch (err: unknown) {
-                            setError(
-                              err instanceof Error
-                                ? err.message
-                                : "Upload gambar gagal"
-                            );
-                          } finally {
-                            setUploadingImage(false);
-                          }
-                        }}
-                      />
-                    </label>
-                    {uploadingImage && (
-                      <div className="uploading-badge">⏳ Mengunggah…</div>
-                    )}
-                    {psychiatristInfo.imageUrl && (
-                      <div style={{ marginTop: 8 }}>
-                        <input
-                          className="field-input"
-                          style={{ fontSize: 12 }}
-                          value={psychiatristInfo.imageUrl}
-                          onChange={(e) =>
-                            setPsychiatristInfo((p) => ({
-                              ...p,
-                              imageUrl: e.target.value,
-                            }))
-                          }
-                          placeholder="atau tempel URL gambar"
-                        />
-                      </div>
-                    )}
+                    <FileUploaderRegular
+                      pubkey={process.env.NEXT_PUBLIC_UPLOADCARE_KEY!}
+                      maxLocalFileSizeBytes={5000000}
+                      imgOnly={true}
+                      onFileUploadSuccess={(file) => {
+                        const fullUrl = file.cdnUrl; // ← cukup ini saja!
+
+                        console.log("FINAL URL:", fullUrl);
+
+                        setPsychiatristInfo((p) => ({
+                          ...p,
+                          imageUrl: fullUrl,
+                          imageId: file.uuid,
+                        }));
+                      }}
+                      onFileUploadFailed={(err) => {
+                        setError("Upload gambar gagal: " + err.message);
+                      }}
+                    />
                   </div>
                 </div>
               </SectionCard>
             </>
-          )}
-
+          )}{" "}
+          {/* ← closes {role === "psychiatrist" && ( */}
           {/* ── Save ── */}
           <div className="submit-bar">
             <button type="submit" className="submit-btn">

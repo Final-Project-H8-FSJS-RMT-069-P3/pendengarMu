@@ -36,7 +36,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const db = await getDB();
         const usersCollection = db.collection("Users");
 
-        const user = await usersCollection.findOne({ email: credentials.email });
+        const user = await usersCollection.findOne({
+          email: credentials.email,
+        });
 
         if (!user) {
           return null;
@@ -51,7 +53,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return null;
         }
 
-        const role = user.role === "psychiatrist" || user.role === "DOCTOR" ? "DOCTOR" : "USER";
+        const role =
+          user.role === "psychiatrist" || user.role === "DOCTOR"
+            ? "DOCTOR"
+            : "USER";
 
         return {
           id: user._id.toString(),
