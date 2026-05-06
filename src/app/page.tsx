@@ -6,56 +6,6 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import Carousel3D from "@/components/animation";
 
-/*
-const PSYCHOLOGISTS = [
-  {
-    name: "Dina Amalia, M.Psi",
-    role: "Psikolog Klinis Dewasa",
-    harga: "399.000",
-    rating: "4.9",
-    reviews: "120+",
-    tags: ["Anxiety", "Depression", "Self-Love"],
-    img: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&q=80",
-  },
-  {
-    name: "Rizky Putra, M.Psi",
-    role: "Psikolog Hubungan & Keluarga",
-    harga: "350.000",
-    rating: "5.0",
-    reviews: "85+",
-    tags: ["Relationship", "Family", "Trauma"],
-    img: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400&q=80",
-  },
-  {
-    name: "Sarah Wijaya, M.Psi",
-    role: "Psikolog Anak & Remaja",
-    harga: "320.000",
-    rating: "4.8",
-    reviews: "210+",
-    tags: ["Parenting", "Education", "Growth"],
-    img: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=400&q=80",
-  },
-  {
-    name: "Budi Santoso, M.Psi",
-    role: "Psikolog Klinis & Trauma",
-    harga: "375.000",
-    rating: "4.7",
-    reviews: "95+",
-    tags: ["Stress", "Burnout", "Work-Life"],
-    img: "https://images.unsplash.com/photo-1582750433449-648ed127bb54?w=400&q=80",
-  },
-  {
-    name: "Rina Kusuma, M.Psi",
-    role: "Psikolog Pernikahan & Keluarga",
-    harga: "410.000",
-    rating: "5.0",
-    reviews: "150+",
-    tags: ["Marriage", "Communication", "Conflict"],
-    img: "https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=400&q=80",
-  },
-];
-*/
-
 type ApiDoctor = {
   _id: string;
   name: string;
@@ -64,6 +14,7 @@ type ApiDoctor = {
     experience?: number;
     scheduleDays?: string[];
     speciality?: string[];
+    imageUrl?: string; // ← tambah ini
   };
 };
 
@@ -74,22 +25,25 @@ type DoctorCard = {
   rating: string;
   reviews: string;
   tags: string[];
-  img: string;
+  imageUrl?: string; // ← ganti img jadi imageUrl, optional
 };
 
 type GetDoctorsResponse = {
   data?: ApiDoctor[];
 };
 
-const DEFAULT_DOCTOR_IMAGES = [
-  "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&q=80",
-  "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400&q=80",
-  "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=400&q=80",
-  "https://images.unsplash.com/photo-1582750433449-648ed127bb54?w=400&q=80",
-  "https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=400&q=80",
-];
+// ← DEFAULT_DOCTOR_IMAGES dihapus
 
 const DEFAULT_DOCTOR_TAGS = ["Konseling", "Mental Health", "Terpercaya"];
+
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
 
 const REVIEWS = [
   {
@@ -283,7 +237,7 @@ export default function Home() {
 
         const result: GetDoctorsResponse = await response.json();
         const mappedDoctors: DoctorCard[] = (result.data ?? []).map(
-          (doctor, index) => ({
+          (doctor) => ({
             _id: doctor._id,
             name: doctor.name,
             role:
@@ -293,10 +247,8 @@ export default function Home() {
               doctor.psychiatristInfo?.experience !== undefined
                 ? `${doctor.psychiatristInfo.experience}+`
                 : "Baru",
-            tags:
-              doctor.psychiatristInfo?.speciality ||
-              DEFAULT_DOCTOR_TAGS,
-            img: DEFAULT_DOCTOR_IMAGES[index % DEFAULT_DOCTOR_IMAGES.length],
+            tags: doctor.psychiatristInfo?.speciality || DEFAULT_DOCTOR_TAGS,
+            imageUrl: doctor.psychiatristInfo?.imageUrl, // dari API, tidak ada fallback
           })
         );
 
@@ -305,7 +257,6 @@ export default function Home() {
         }
       } catch (error) {
         console.error("Failed to fetch doctors:", error);
-
         if (isMounted) {
           setDoctors([]);
         }
@@ -374,8 +325,8 @@ export default function Home() {
                         i === 0
                           ? "bg-blue-200"
                           : i === 1
-                          ? "bg-purple-200"
-                          : "bg-pink-200"
+                            ? "bg-purple-200"
+                            : "bg-pink-200"
                       }`}
                     >
                       {l}
@@ -389,10 +340,7 @@ export default function Home() {
               </div>
             </div>
             <div className="relative w-full py-20">
-              {/* Efek Glow di belakang agar estetik */}
               <div className="absolute inset-0 bg-blue-200/20 rounded-full blur-[100px] pointer-events-none" />
-
-              {/* Container Utama: Hapus rotate-2 dan overflow-hidden */}
               <div className="relative z-10 w-full h-[550px] flex items-center justify-center">
                 <Carousel3D
                   background="transparent"
@@ -403,12 +351,16 @@ export default function Home() {
             </div>
           </div>
         </section>
+
         <section className="py-12 bg-white">
           <div className="max-w-7xl mx-auto px-6">
             <div className="grid md:grid-cols-3 gap-8">
               {(() => {
                 const specialtiesLabel =
-                  doctors && doctors.length > 0 && doctors[0].tags && doctors[0].tags.length > 0
+                  doctors &&
+                  doctors.length > 0 &&
+                  doctors[0].tags &&
+                  doctors[0].tags.length > 0
                     ? doctors[0].tags.slice(0, 3).join(", ")
                     : "Online & Offline";
 
@@ -491,7 +443,7 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="overflow-hidden pb-10" style={{}}>
+            <div className="overflow-hidden pb-10">
               <div
                 className="flex gap-8 w-max"
                 style={{ animation: "scroll-left 30s linear infinite" }}
@@ -516,12 +468,21 @@ export default function Home() {
                       key={`${p._id}-${idx}`}
                       className="w-72 shrink-0 bg-white rounded-[2rem] overflow-hidden group shadow-sm hover:shadow-xl transition-all duration-300 border border-transparent hover:border-blue-100"
                     >
-                      <div className="relative h-64 overflow-hidden bg-gray-100">
-                        <img
-                          src={p.img}
-                          alt={p.name}
-                          className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
-                        />
+                      {/* ── Foto / Inisial ── */}
+                      <div className="relative h-64 overflow-hidden bg-blue-50">
+                        {p.imageUrl ? (
+                          <img
+                            src={p.imageUrl}
+                            alt={p.name}
+                            className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-600 to-blue-400 group-hover:scale-105 transition-transform duration-500">
+                            <span className="text-5xl font-black text-white select-none">
+                              {getInitials(p.name)}
+                            </span>
+                          </div>
+                        )}
                         <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold text-blue-900 flex items-center gap-1">
                           <svg
                             className="w-4 h-4 text-yellow-400"
@@ -533,6 +494,7 @@ export default function Home() {
                           {p.rating} ({p.reviews})
                         </div>
                       </div>
+
                       <div className="p-8">
                         <h3 className="text-xl font-bold text-blue-900 mb-1">
                           {p.name}
@@ -548,10 +510,7 @@ export default function Home() {
                             </span>
                           ))}
                         </div>
-                        <button
-                          className="w-full py-3 bg-blue-900 text-white font-bold rounded-xl hover:bg-blue-800 transition-colors active:scale-95
-                        "
-                        >
+                        <button className="w-full py-3 bg-blue-900 text-white font-bold rounded-xl hover:bg-blue-800 transition-colors active:scale-95">
                           <Link href="/listpsikolog">Booking Jadwal</Link>
                         </button>
                       </div>
@@ -859,24 +818,9 @@ export default function Home() {
                       ))}
                     </ul>
                     <div className="mt-2 text-center">
-                      <div className="flex items-center justify-center gap-3 mb-0.5">
-                        {/* <span className="text-sm text-gray-400 line-through">
-                          Rp{card.originalPrice.toLocaleString("id-ID")}
-                        </span>
-                        <span className="text-xs font-semibold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">
-                          -{card.discount}%
-                        </span> */}
-                      </div>
-                      <div className="flex items-end justify-center gap-1">
-                        {/* <span className="text-3xl font-extrabold text-blue-600 tracking-tight">
-                          Rp{card.finalPrice.toLocaleString("id-ID")}
-                        </span> */}
-                        {/* <span className="text-sm text-gray-500 mb-1">/jam</span> */}
-                      </div>
+                      <div className="flex items-center justify-center gap-3 mb-0.5" />
+                      <div className="flex items-end justify-center gap-1" />
                     </div>
-                    {/* <button className="w-full py-3.5 rounded-xl font-bold text-base bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg hover:shadow-blue-200 active:scale-95 transition-all duration-200">
-                      Booking Sekarang
-                    </button> */}
                   </div>
                 </div>
               ))}
@@ -1161,7 +1105,7 @@ export default function Home() {
         </div>
         <div className="max-w-7xl mx-auto px-8 py-6 border-t border-gray-100 text-center">
           <p className="text-gray-400 text-xs">
-            © 2024 pendengarMu. Hak Cipta Dilindungi.
+            © 2026 pendengarMu. Hak Cipta Dilindungi.
           </p>
         </div>
       </footer>

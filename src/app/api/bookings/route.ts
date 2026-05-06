@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
+import midtransClient from "midtrans-client";
 import { auth } from "@/lib/auth";
 import { getDB } from "../../../server/config/mongodb"; //<-- import dari src yg bener
 import { ObjectId } from "mongodb"; //<-- import dari src yg bener
-import { SendEmail } from "@/server/helpers/sendEmail";
 import User from "@/server/models/User";
-import { sendWhatsApp } from "@/server/helpers/sendWa";
 
 export async function POST(req: Request) {
   try {
@@ -58,7 +57,7 @@ export async function POST(req: Request) {
       formBriefId: formBriefId ? new ObjectId(formBriefId) : null,
       date: dateObj,
       sessionDuration: parseInt(sessionDuration) || 30,
-      amount: parseFloat(amount) || 0,
+      amount: Math.round(parseFloat(amount) || 0),
       type: mapType,
       isPaid: false,
       isDone: false,
@@ -77,16 +76,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const result = await db.collection("UserBookings").insertOne(bookingData);
-
-    const roomName = `room-${result.insertedId.toString()}`;
-
-    await db.collection("Rooms").insertOne({
-      userId: bookingData.userId,
-      staffId: bookingData.staffId,
-      roomName: roomName,
-      createdAt: new Date(),
-    });
+    // Do NOT create the booking yet. Create an Order that carries the booking payload
+    // and only create the actual UserBookings record after payment is confirmed.
 
     console.log("aku disini");
 
@@ -112,81 +103,67 @@ export async function POST(req: Request) {
       minute: "2-digit",
     });
 
-    // build a tidy email payload and send without breaking the booking flow
-    const emailPayload = {
-      patientEmail: userData?.email ?? "",
-      doctorEmail: doctorData?.email ?? "",
-      doctorName: doctorData?.name ?? "",
-      patientName: userData?.name ?? "Unknown Patient",
-      patientPhone: userData?.phoneNumber ?? "",
-      patientAddress: userData?.address ?? "",
-      bookingDate: bookingDate,
-      bookingTime: `${bookingTime} WIB`,
-      priceTier: bookingData.amount.toString(),
-    };
-    try {
-      void SendEmail({
-        type: "doctor",
-        ...emailPayload,
-      }).catch((err: any) => console.error("Failed to send booking email:", err));
-      void SendEmail({
-        type: "patient",
-        ...emailPayload,
-      }).catch((err: any) => console.error("Failed to send booking email:", err));
-      console.log("Email sent");
-    } catch (emailErr) {
-      console.error("Failed to send booking email:", emailErr);
-      // don't fail the booking if email sending fails
-    }
+    const orderId = `ORDER-${new ObjectId().toString()}`;
 
-    // Send WhatsApp notification to doctor
-    if (doctorData?.phoneNumber) {
-      const waMessage = [
-        "📢 *Booking Request*",
-        "",
-        `Patient : ${emailPayload.patientName}`,
-        `Date    : ${emailPayload.bookingDate}`,
-        `Time    : ${emailPayload.bookingTime}`,
-        `Session : ${mapType}`,
-        "Status  : *PENDING*",
-        "",
-        "Waiting for patient payment confirmation.",
-      ].join("\n");
-      void sendWhatsApp(doctorData.phoneNumber, waMessage)
-        .then(() => console.log("WhatsApp sent to doctor"))
-  .catch((err) => console.error("WA doctor error:", err));
+    const snap = new midtransClient.Snap({
+      isProduction: process.env.MIDTRANS_IS_PRODUCTION === "true",
+      serverKey: process.env.MIDTRANS_SERVER_KEY || "",
+      clientKey: process.env.MIDTRANS_CLIENT_KEY || "",
+    });
+
+    const parameter = {
+      transaction_details: {
+        order_id: orderId,
+        gross_amount: bookingData.amount,
+      },
+      item_details: [
+        {
+          id: staffId,
+          price: bookingData.amount,
+          quantity: 1,
+          name: `Consultation ${mapType}`,
+        },
+      ],
+      customer_details: {
+        first_name: userData?.name || "User",
+        email: userData?.email || "",
+      },
+      credit_card: {
+        secure: true,
+      },
+      callbacks: {
+        finish: `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/payment/loading?orderId=${orderId}`,
+      },
+    };
+
+    const transaction = await snap.createTransaction(parameter);
+
+    if (!transaction.token) {
+      console.error("Midtrans token missing:", transaction);
+      throw new Error("Failed to get Midtrans token");
     }
-    const paymentUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/payment?bookingId=${result.insertedId.toString()}`;
-    if (userData?.phoneNumber) {
-      const waMessage = [
-        "*Complete Your Payment*",
-        "",
-        `Hi ${emailPayload.patientName},`,
-        "",
-        "Booking details:",
-        "",
-        `Doctor  : ${emailPayload.doctorName}`,
-        `Date    : ${emailPayload.bookingDate}`,
-        `Time    : ${emailPayload.bookingTime}`,
-        `Session : ${mapType}`,
-        `Price   : Rp ${emailPayload.priceTier}`,
-        "",
-        "Payment link:",
-        paymentUrl,
-        "",
-        "Your booking will be confirmed after payment.",
-      ].join("\n");
-      void sendWhatsApp(userData.phoneNumber, waMessage)
-        .then(() =>
-          console.log("WhatsApp sent to patient", userData?.phoneNumber),
-        )
-        .catch((err: any) => console.error("Failed to send WhatsApp:", err));
-    }
+    console.log("STEP: before insert order");
+    await db.collection("Orders").insertOne({
+      userId: new ObjectId(session.user.id),
+      orderId,
+      // booking will be created after payment confirmation
+      bookingId: null,
+      bookingPayload: bookingData,
+      items: parameter.item_details,
+      totalAmount: bookingData.amount,
+      status: "pending",
+      paymentToken: transaction.token,
+      customerDetails: parameter.customer_details,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
     return NextResponse.json(
       {
         message: "Booking created successfully",
-        bookingId: result.insertedId,
-        roomName: roomName,
+        orderId,
+        redirect_url: transaction.redirect_url,
+        token: transaction.token,
       },
       { status: 201 },
     );

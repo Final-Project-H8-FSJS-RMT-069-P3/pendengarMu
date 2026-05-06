@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import midtransClient from "midtrans-client"
 import { auth } from "@/lib/auth";
 import Order from "@/server/models/Order";
+import { ObjectId } from "mongodb";
 
 export async function POST(request: NextRequest) {
   try {
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
     await Order.createOrder({
       userId: session.user.id,
       orderId,
-      bookingId,
+      bookingId: new ObjectId(bookingId),
       items,
       totalAmount: grossAmount,
       status: "pending",

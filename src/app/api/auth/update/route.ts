@@ -12,22 +12,28 @@ export async function PATCH(req: Request) {
     const body = await req.json();
     const { name, phoneNumber, address, psychiatristInfo } = body;
 
+    console.log("=== PATCH UPDATE DIPANGGIL ===");
+    console.log("Session role:", session.user.role);
+    console.log("psychiatristInfo:", psychiatristInfo);
+
     // Update basic fields
     const collection = await User.getCollection();
     await collection.updateOne(
-      { _id: new (await import('mongodb')).ObjectId(session.user.id) },
+      { _id: new (await import("mongodb")).ObjectId(session.user.id) },
       { $set: { name, phoneNumber, address } }
     );
 
-    if (psychiatristInfo && session.user.role === 'DOCTOR') {
-      console.log("Updating psychiatrist info for user:", session.user.id);
-      console.log("Psychiatrist info data:", psychiatristInfo);
-      
-      // Fetch current user to check if psychiatristInfo exists
+    if (psychiatristInfo && session.user.role === "DOCTOR") {
+      console.log("=== MASUK BLOCK PSYCHIATRIST ===");
+      console.log("psychiatristInfo.imageUrl:", psychiatristInfo.imageUrl);
+
       const user = await User.getUserById(session.user.id);
       console.log("User psychiatristInfo exists:", !!user?.psychiatristInfo);
-      
-      if (user?.psychiatristInfo && Object.keys(user.psychiatristInfo).length > 0) {
+
+      if (
+        user?.psychiatristInfo &&
+        Object.keys(user.psychiatristInfo).length > 0
+      ) {
         console.log("Calling update method");
         await User.updatePsychiatristInfo(session.user.id, psychiatristInfo);
       } else {
@@ -39,7 +45,8 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ message: "Profile updated" });
   } catch (err: any) {
     console.error("Profile update error:", err);
-    const message = err instanceof Error ? err.message : 'Failed to update profile';
+    const message =
+      err instanceof Error ? err.message : "Failed to update profile";
     return NextResponse.json({ message }, { status: 500 });
   }
 }
