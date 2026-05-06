@@ -147,6 +147,7 @@ console.log("[WEBHOOK ORDER RESULT]", order);
           await UserBooking.updateBookingCalendarSync(order.bookingId.toString(), {
             eventId: calendarEvent.eventId,
             eventLink: calendarEvent.eventLink,
+            meetLink: (calendarEvent as any).meetLink,
             status: "success",
           });
 
