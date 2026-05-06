@@ -77,7 +77,7 @@ const handlePay = async (bookingId: string) => {
     if (!res.ok) throw new Error(data.message);
 
     if (window.snap) {
-      window.snap.pay(data.token); // 🔥 INI KUNCI UTAMA
+      window.snap.pay(data.token);
     } else {
       alert("Midtrans Snap belum load");
     }

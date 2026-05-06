@@ -57,7 +57,7 @@ export async function POST(req: Request) {
       formBriefId: formBriefId ? new ObjectId(formBriefId) : null,
       date: dateObj,
       sessionDuration: parseInt(sessionDuration) || 30,
-      amount: parseFloat(amount) || 0,
+      amount: Math.round(parseFloat(amount) || 0),
       type: mapType,
       isPaid: false,
       isDone: false,
@@ -145,13 +145,16 @@ export async function POST(req: Request) {
     };
 
     const transaction = await snap.createTransaction(parameter);
+
     if (!transaction.token) {
+      console.error("Midtrans token missing:", transaction);
       throw new Error("Failed to get Midtrans token");
     }
+    console.log("STEP: before insert order");
     await db.collection("Orders").insertOne({
-      userId: session.user.id,
+      userId: new ObjectId(session.user.id),
       orderId,
-      bookingId: result.insertedId,
+      bookingId: new ObjectId(result.insertedId),
       items: parameter.item_details,
       totalAmount: bookingData.amount,
       status: "pending",
@@ -160,6 +163,7 @@ export async function POST(req: Request) {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+
     return NextResponse.json(
       {
         message: "Booking created successfully",
