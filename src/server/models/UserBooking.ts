@@ -11,8 +11,13 @@ export interface IUserBooking {
   amount: number;
   type: "videocall" | "chat-only" | "offline";
   videoCallUrl?: string | null;
+  googleMeetLink?: string;
+  // participant completion status
+  userStatus?: boolean;
+  doctorStatus?: boolean;
   isPaid: boolean;
   isDone: boolean;
+  sessionEndedAt?: Date;
   googleCalendarEventId?: string;
   googleCalendarEventLink?: string;
   googleCalendarSyncStatus?: "pending" | "success" | "failed";
@@ -148,8 +153,9 @@ export default class UserBooking {
     payload: {
       eventId?: string;
       eventLink?: string;
-      status: "pending" | "success" | "failed";
-      error?: string;
+        meetLink?: string;
+        status: "pending" | "success" | "failed";
+        error?: string;
     },
   ) {
     const collection = await this.getCollection();
@@ -166,6 +172,10 @@ export default class UserBooking {
     if (payload.eventLink) {
       setPayload.googleCalendarEventLink = payload.eventLink;
     }
+    if (payload.meetLink) {
+      setPayload.googleMeetLink = payload.meetLink;
+      setPayload.videoCallUrl = payload.meetLink;
+    }
 
     const result = await collection.updateOne(
       { _id: toObjectId(bookingId) },
@@ -175,5 +185,40 @@ export default class UserBooking {
     );
 
     return result;
+  }
+
+  static async markParticipantDone(
+    bookingId: string,
+    participantId: string,
+  ) {
+    const collection = await this.getCollection();
+
+    const booking = await collection.findOne({ _id: toObjectId(bookingId) });
+    if (!booking) throw new Error("Booking not found");
+
+    const isDoctor = booking.staffId.toString() === participantId;
+    const isUser = booking.userId.toString() === participantId;
+    if (!isDoctor && !isUser) throw new Error("Participant not part of booking");
+
+    const updateFields: Partial<IUserBooking> = {};
+    if (isDoctor) updateFields.doctorStatus = true;
+    if (isUser) updateFields.userStatus = true;
+
+    // apply the participant flag
+    await collection.updateOne({ _id: toObjectId(bookingId) }, { $set: updateFields });
+
+    // re-fetch booking to check status
+    const updated = await collection.findOne({ _id: toObjectId(bookingId) });
+    const userDone = !!updated.userStatus;
+    const doctorDone = !!updated.doctorStatus;
+
+    if (userDone && doctorDone && !updated.isDone) {
+      await collection.updateOne(
+        { _id: toObjectId(bookingId) },
+        { $set: { isDone: true, sessionEndedAt: new Date() } },
+      );
+    }
+
+    return { userDone, doctorDone, isDone: !!(updated.isDone || (userDone && doctorDone)) };
   }
 }

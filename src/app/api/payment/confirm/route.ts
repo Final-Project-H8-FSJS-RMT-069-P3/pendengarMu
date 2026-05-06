@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import midtransClient from "midtrans-client";
 import { getDB } from "@/server/config/mongodb";
 import { ObjectId } from "mongodb";
+import User from "@/server/models/User";
+import UserBooking from "@/server/models/UserBooking";
+import {
+  createPrimaryCalendarEvent,
+  isPrimaryCalendarSlotAvailable,
+} from "@/server/helpers/googleCalendarOAuth";
 
 export async function POST(req: Request) {
   try {
@@ -65,6 +71,69 @@ export async function POST(req: Request) {
 
       // Update order
       await db.collection("Orders").updateOne({ orderId }, { $set: { bookingId: newBookingId, status: "success", updatedAt: new Date() } });
+
+      // Try to sync Google Calendar (create event) similar to webhook flow
+      try {
+        const booking = await UserBooking.getBookingById(newBookingId.toString());
+        const userData = await User.getUserById(booking.userId.toString());
+        const doctorData = await User.getUserById(booking.staffId.toString());
+
+        const doctorCalendar = doctorData?.googleCalendar;
+        const userCalendar = userData?.googleCalendar;
+
+        if (doctorCalendar?.refreshToken && userCalendar?.refreshToken && booking) {
+          await UserBooking.updateBookingCalendarSync(newBookingId.toString(), { status: "pending" });
+
+          const bookingStart = new Date(booking.date);
+          const bookingEnd = new Date(
+            bookingStart.getTime() + Math.max(15, booking.sessionDuration) * 60 * 1000,
+          );
+
+          const doctorSlotAvailable = await isPrimaryCalendarSlotAvailable(
+            doctorCalendar,
+            bookingStart,
+            bookingEnd,
+          );
+
+          const userSlotAvailable = await isPrimaryCalendarSlotAvailable(
+            userCalendar,
+            bookingStart,
+            bookingEnd,
+          );
+
+          if (doctorSlotAvailable && userSlotAvailable) {
+            const calendarEvent = await createPrimaryCalendarEvent(doctorCalendar, {
+              bookingId: newBookingId.toString(),
+              startDate: bookingStart,
+              durationMinutes: booking.sessionDuration,
+              sessionType: booking.type,
+              doctorName: doctorData?.name ?? "Doctor",
+              doctorEmail: doctorData?.email,
+              userName: userData?.name ?? "Patient",
+              userEmail: userData?.email,
+            });
+
+            await UserBooking.updateBookingCalendarSync(newBookingId.toString(), {
+              eventId: calendarEvent.eventId,
+              eventLink: calendarEvent.eventLink,
+              meetLink: (calendarEvent as any).meetLink,
+              status: "success",
+            });
+          } else {
+            await UserBooking.updateBookingCalendarSync(newBookingId.toString(), {
+              status: "failed",
+              error: "Calendar conflict for user or doctor",
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Confirm: calendar sync failed", err);
+        try {
+          await UserBooking.updateBookingCalendarSync(newBookingId.toString(), { status: "failed", error: (err as Error).message });
+        } catch (e) {
+          console.error("Failed to set calendar sync failure flag", e);
+        }
+      }
 
       return NextResponse.json({ success: true, bookingId: newBookingId.toString() });
     }

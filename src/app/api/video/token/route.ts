@@ -16,6 +16,7 @@ import { auth } from "@/lib/auth";
 import { getDB } from "@/server/config/mongodb";
 import { RtcTokenBuilder, RtcRole } from "agora-token";
 import { ObjectId } from "mongodb";
+import UserBooking from "@/server/models/UserBooking";
 import { nanoid } from "nanoid"; // npm install nanoid
 
 const APP_ID = process.env.AGORA_APP_ID!;
@@ -225,18 +226,14 @@ export async function POST(req: Request) {
         );
       }
 
-      // Tandai booking sebagai selesai di UserBookings yang sudah ada
-      await bookings.updateOne(
-        { _id: booking._id },
-        {
-          $set: {
-            isDone: true,
-            sessionEndedAt: new Date(),
-          },
-        }
-      );
-
-      return NextResponse.json({ message: "Sesi berhasil diakhiri" });
+      // Mark participant done and finalize only when both have marked done
+      try {
+        const result = await UserBooking.markParticipantDone(booking._id.toString(), currentUserId);
+        return NextResponse.json({ message: "Sesi diperbarui", result });
+      } catch (err) {
+        console.error("Failed to mark participant done:", err);
+        return NextResponse.json({ message: "Gagal memperbarui sesi" }, { status: 500 });
+      }
     }
 
     // Action tidak dikenali
