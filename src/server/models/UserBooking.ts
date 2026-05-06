@@ -3,7 +3,6 @@ import { getDB } from "../config/mongodb";
 
 export interface IUserBooking {
   _id?: ObjectId;
-  orderId?: string;
   userId: ObjectId;
   staffId: ObjectId;
   formBriefId?: ObjectId | null;
@@ -47,16 +46,6 @@ export default class UserBooking {
   static async getCollection() {
     const db = await getDB();
     return db.collection<IUserBooking>("UserBookings");
-  }
-
-  static async createBooking(payload: Omit<IUserBooking, "_id">) {
-    const collection = await this.getCollection();
-    const result = await collection.insertOne({
-      ...payload,
-      createdAt: payload.createdAt ?? new Date(),
-    });
-
-    return result;
   }
 
   

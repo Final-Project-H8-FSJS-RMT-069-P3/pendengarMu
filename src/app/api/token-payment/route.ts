@@ -19,6 +19,6 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({
-    token: order.paymentToken,
+    token: order.snapToken,
   });
 }

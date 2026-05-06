@@ -39,7 +39,6 @@ export async function GET(req: Request) {
 
       const safe = {
         _id: booking._id?.toString(),
-        orderId: booking.orderId || null,
         userId: booking.userId.toString(),
         staffId: booking.staffId.toString(),
         date: booking.date,
@@ -76,7 +75,6 @@ export async function GET(req: Request) {
 
     const safeBookings = bookings.map((booking) => ({
       _id: booking._id?.toString(),
-      orderId: booking.orderId || null,
       userId: booking.userId.toString(),
       staffId: booking.staffId.toString(),
       date: booking.date,

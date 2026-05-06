@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ObjectId } from "mongodb";
 import Order from "@/server/models/Order";
 import UserBooking from "@/server/models/UserBooking";
 import User from "@/server/models/User";
-import { getDB } from "@/server/config/mongodb";
 import { sendWhatsApp } from "@/server/helpers/sendWa";
 import { SendEmail } from "@/server/helpers/sendEmail";
 import {
@@ -45,71 +43,24 @@ export async function POST(request: NextRequest) {
 
     if (orderStatus === "success") {
       const order = await Order.getOrderById(order_id);
-      if (!order) {
-        console.error("[webhook] Order not found:", order_id);
-        return NextResponse.json(
-          { message: "Order not found" },
-          { status: 404 },
-        );
-      }
       console.log("[webhook] Order retrieved:", { orderId: order_id, bookingId: order?.bookingId });
-      console.log("[WEBHOOK ORDER_ID RAW]", order_id);
 
-      let bookingId = order.bookingId?.toString();
-      const db = await getDB();
-
-      if (!bookingId && order.bookingDraft) {
-        const existingDraftBooking = await db.collection("UserBookings").findOne({
-          orderId: order.orderId,
-        });
-
-        if (existingDraftBooking?._id) {
-          bookingId = existingDraftBooking._id.toString();
-        } else {
-          const bookingInsert = await UserBooking.createBooking({
-            orderId: order.orderId,
-            userId: new ObjectId(order.bookingDraft.userId),
-            staffId: new ObjectId(order.bookingDraft.staffId),
-            formBriefId: order.bookingDraft.formBriefId
-              ? new ObjectId(order.bookingDraft.formBriefId)
-              : null,
-            date: order.bookingDraft.date,
-            sessionDuration: order.bookingDraft.sessionDuration,
-            amount: order.bookingDraft.amount,
-            type: order.bookingDraft.type,
-            isPaid: true,
-            isDone: false,
-            reminderSent: false,
-            createdAt: new Date(),
-          });
-
-          bookingId = bookingInsert.insertedId.toString();
-
-          await db.collection("Rooms").insertOne({
-            userId: new ObjectId(order.bookingDraft.userId),
-            staffId: new ObjectId(order.bookingDraft.staffId),
-            roomName: `room-${bookingId}`,
-            createdAt: new Date(),
-          });
-
-          await Order.linkBookingToOrder(order.orderId, bookingId);
-        }
-      }
-
-      if (!bookingId) {
-        console.error("[webhook] No booking data found in order:", order_id);
+      if (!order?.bookingId) {
+        console.error("[webhook] No booking ID found in order:", order_id);
         return NextResponse.json(
           { message: "Booking not found" },
           { status: 404 },
         );
       }
+      console.log("[WEBHOOK ORDER_ID RAW]", order_id);
 
-      const booking = bookingId ? await UserBooking.getBookingById(bookingId) : null;
-      console.log("[WEBHOOK ORDER RESULT]", order);
-      console.log("[webhook] Booking retrieved:", { bookingId, isPaid: booking?.isPaid });
+      const booking = await UserBooking.getBookingById(order.bookingId.toString());
+
+console.log("[WEBHOOK ORDER RESULT]", order);
+      console.log("[webhook] Booking retrieved:", { bookingId: order.bookingId, isPaid: booking?.isPaid });
 
       if (!booking) {
-        console.error("[webhook] Booking not found:", bookingId || order.bookingId);
+        console.error("[webhook] Booking not found:", order.bookingId);
         return NextResponse.json(
           { message: "Booking not found" },
           { status: 404 },
@@ -119,29 +70,29 @@ export async function POST(request: NextRequest) {
       const wasAlreadyPaid = booking.isPaid;
 
       if (!wasAlreadyPaid) {
-        console.log("[webhook] Updating booking payment status to true:", bookingId);
+        console.log("[webhook] Updating booking payment status to true:", order.bookingId);
         await UserBooking.updateBookingPaymentStatus(
-          bookingId,
+          order.bookingId.toString(),
           true,
         );
-        console.log("[webhook] Booking payment status updated successfully:", bookingId);
+        console.log("[webhook] Booking payment status updated successfully:", order.bookingId);
       } else {
-        console.log("[webhook] Booking already paid, skipping payment status update:", bookingId);
+        console.log("[webhook] Booking already paid, skipping payment status update:", order.bookingId);
       }
 
       const userData = await User.getUserById(booking.userId.toString());
       const doctorData = await User.getUserById(booking.staffId.toString());
 
       // Verify the update was successful
-      const updatedBooking = await UserBooking.getBookingById(bookingId);
+      const updatedBooking = await UserBooking.getBookingById(order.bookingId.toString());
       if (updatedBooking?.isPaid) {
         console.log("[webhook] ✓ Payment status confirmed in database:", {
-          bookingId,
+          bookingId: order.bookingId,
           isPaid: updatedBooking.isPaid,
         });
       } else {
         console.error("[webhook] ✗ Payment status update verification failed:", {
-          bookingId,
+          bookingId: order.bookingId,
           isPaid: updatedBooking?.isPaid,
         });
       }
