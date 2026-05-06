@@ -21,9 +21,10 @@ const getSingleParam = (value?: string | string[]) => {
   return Array.isArray(value) ? value[0] : value;
 };
 
-const toPositiveNumber = (value?: string, fallback = 249000) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+const toPositiveNumber = (value?: string) => {
+  if (!value) return 0;
+  const num = Number(value);
+  return Number.isFinite(num) && num > 0 ? num : 0;
 };
 
 export default async function PaymentPage({ searchParams }: PaymentPageProps) {

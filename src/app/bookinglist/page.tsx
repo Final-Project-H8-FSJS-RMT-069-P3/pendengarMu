@@ -1,4 +1,9 @@
 "use client";
+declare global {
+  interface Window {
+    snap: any;
+  }
+}
 
 import Navbar from "@/components/navbar";
 import Link from "next/link";
@@ -57,6 +62,30 @@ const formatSessionType = (type?: string) => {
       return "Unknown";
   }
 };
+const handlePay = async (bookingId: string) => {
+  try {
+    const res = await fetch("/api/token-payment", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ bookingId }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.message);
+
+    if (window.snap) {
+      window.snap.pay(data.token); // 🔥 INI KUNCI UTAMA
+    } else {
+      alert("Midtrans Snap belum load");
+    }
+  } catch (err) {
+    console.error(err);
+    alert("Gagal memulai pembayaran");
+  }
+};
 
 export default function BookingListPage() {
   const { data: session } = useSession();
@@ -67,10 +96,10 @@ export default function BookingListPage() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [paymentFilter, setPaymentFilter] = useState<"ALL" | "PAID" | "UNPAID">(
-    "ALL"
+    "ALL",
   );
   const [statusFilter, setStatusFilter] = useState<"ALL" | "DONE" | "UPCOMING">(
-    "ALL"
+    "ALL",
   );
 
   const router = useRouter();
@@ -94,7 +123,7 @@ export default function BookingListPage() {
       } catch (err: unknown) {
         if (isMounted) {
           setError(
-            err instanceof Error ? err.message : "Unexpected error happened"
+            err instanceof Error ? err.message : "Unexpected error happened",
           );
         }
       } finally {
@@ -194,8 +223,8 @@ export default function BookingListPage() {
                             ? f === "PAID"
                               ? "bg-green-600 text-white"
                               : f === "UNPAID"
-                              ? "bg-amber-600 text-white"
-                              : "bg-blue-600 text-white"
+                                ? "bg-amber-600 text-white"
+                                : "bg-blue-600 text-white"
                             : "bg-slate-100"
                         }`}
                       >
@@ -216,16 +245,16 @@ export default function BookingListPage() {
                             ? f === "DONE"
                               ? "bg-green-600 text-white"
                               : f === "UPCOMING"
-                              ? "bg-amber-600 text-white"
-                              : "bg-blue-600 text-white"
+                                ? "bg-amber-600 text-white"
+                                : "bg-blue-600 text-white"
                             : "bg-slate-100"
                         }`}
                       >
                         {f === "ALL"
                           ? "All"
                           : f === "DONE"
-                          ? "Done"
-                          : "Upcoming"}
+                            ? "Done"
+                            : "Upcoming"}
                       </button>
                     ))}
                   </div>
@@ -317,12 +346,12 @@ export default function BookingListPage() {
                             <div className="flex items-center gap-2">
                               {/* Pay Now — hanya untuk user yang belum bayar */}
                               {!isPsychiatrist && !booking.isPaid && (
-                                <Link
-                                  href={`/payment?bookingId=${booking._id}`}
+                                <button
+                                  onClick={() => handlePay(booking._id)}
                                   className="text-xs px-3 py-1.5 bg-orange-50 text-orange-600 font-semibold rounded-lg hover:bg-orange-100 transition-colors whitespace-nowrap border border-orange-200"
                                 >
                                   Pay Now
-                                </Link>
+                                </button>
                               )}
                               {/* Start Session — sudah bayar, belum selesai */}
 
@@ -435,12 +464,12 @@ export default function BookingListPage() {
                       <div className="flex items-center gap-2">
                         {/* Pay Now — user yang belum bayar */}
                         {!isPsychiatrist && !booking.isPaid && (
-                          <Link
-                            href={`/payment?bookingId=${booking._id}`}
+                          <button
+                            onClick={() => handlePay(booking._id)}
                             className="flex-1 text-center text-xs px-4 py-3 bg-orange-50 text-orange-600 font-black rounded-xl border border-orange-200 hover:bg-orange-100 transition-all active:scale-95"
                           >
                             Pay Now
-                          </Link>
+                          </button>
                         )}
                         {/* Start Session */}
                         {booking.isPaid && !booking.isDone && (
