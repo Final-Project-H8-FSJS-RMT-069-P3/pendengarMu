@@ -6,9 +6,9 @@ declare global {
 }
 
 import Navbar from "@/components/navbar";
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { StartSessionButton } from "./StartSessionButton";
+import { ReviewModal } from "./ReviewModal";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -34,6 +34,7 @@ type BookingApiResponse = {
   data?: Booking[];
 };
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
 const formatDateTime = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Invalid date";
@@ -42,15 +43,12 @@ const formatDateTime = (value: string) => {
     timeStyle: "short",
   });
 };
-
-const formatAmount = (amount: number) => {
-  return new Intl.NumberFormat("id-ID", {
+const formatAmount = (amount: number) =>
+  new Intl.NumberFormat("id-ID", {
     style: "currency",
     currency: "IDR",
     maximumFractionDigits: 0,
   }).format(amount || 0);
-};
-
 const formatSessionType = (type?: string) => {
   switch (type) {
     case "videocall":
@@ -67,144 +65,152 @@ const handlePay = async (bookingId: string) => {
   try {
     const res = await fetch("/api/token-payment", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ bookingId }),
     });
-
     const data = await res.json();
-
     if (!res.ok) throw new Error(data.message);
-
-    if (window.snap) {
-      window.snap.pay(data.token); // 🔥 INI KUNCI UTAMA
-    } else {
-      alert("Midtrans Snap belum load");
-    }
+    if (window.snap) window.snap.pay(data.token);
+    else alert("Midtrans Snap belum load");
   } catch (err) {
     console.error(err);
     alert("Gagal memulai pembayaran");
   }
 };
 
+// ── Component ─────────────────────────────────────────────────────────────────
 export default function BookingListPage() {
   const { data: session } = useSession();
   const searchParams = useSearchParams();
+  const router = useRouter();
+
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [role, setRole] = useState<"USER" | "DOCTOR" | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [paymentSyncLoading, setPaymentSyncLoading] = useState(false);
 
+  // ID booking yang sudah pernah di-review oleh user ini
+  const [reviewedIds, setReviewedIds] = useState<Set<string>>(new Set());
+  // Booking yang sedang dibuka modal review-nya
+  const [reviewTarget, setReviewTarget] = useState<Booking | null>(null);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [paymentFilter, setPaymentFilter] = useState<"ALL" | "PAID" | "UNPAID">(
-    "ALL",
+    "ALL"
   );
   const [statusFilter, setStatusFilter] = useState<"ALL" | "DONE" | "UPCOMING">(
-    "ALL",
+    "ALL"
   );
 
-  const router = useRouter();
   const paymentState = searchParams.get("payment");
   const paymentOrderId = searchParams.get("order_id");
   const recoveringPayment = paymentState === "processing" && !!paymentOrderId;
+
   const sessionRole = String(session?.user?.role || "").toLowerCase();
   const isPsychiatrist =
     sessionRole === "doctor" || sessionRole === "psychiatrist";
   const isDoctor = role === "DOCTOR";
 
+  // ── Fetch bookings ────────────────────────────────────────────────────────
   const loadBookings = async () => {
     const response = await fetch("/api/getbookings", { cache: "no-store" });
     const payload = (await response.json()) as BookingApiResponse;
     if (!response.ok)
       throw new Error(payload.message || "Failed to fetch bookings");
-
     setBookings(payload.data || []);
     setRole(payload.role || null);
-
     return payload.data || [];
+  };
+
+  // ── Fetch reviewed booking IDs (hanya untuk USER) ────────────────────────
+  const loadReviewedIds = async () => {
+    try {
+      const res = await fetch("/api/reviews/me");
+      if (!res.ok) return;
+      const json = (await res.json()) as { data: string[] };
+      setReviewedIds(new Set(json.data));
+    } catch {
+      // non-critical, abaikan
+    }
   };
 
   useEffect(() => {
     let isMounted = true;
-    const fetchBookings = async () => {
+    const init = async () => {
       try {
         if (isMounted) {
-          await loadBookings();
+          await Promise.all([loadBookings(), loadReviewedIds()]);
         }
       } catch (err: unknown) {
-        if (isMounted) {
+        if (isMounted)
           setError(
-            err instanceof Error ? err.message : "Unexpected error happened",
+            err instanceof Error ? err.message : "Unexpected error happened"
           );
-        }
       } finally {
         if (isMounted) setLoading(false);
       }
     };
-    fetchBookings();
+    void init();
     return () => {
       isMounted = false;
     };
   }, []);
 
+  // ── Polling setelah payment ───────────────────────────────────────────────
   useEffect(() => {
     if (!recoveringPayment) return;
-
     let isMounted = true;
     setPaymentSyncLoading(true);
-
-    const pollPaymentStatus = async () => {
+    const poll = async () => {
       try {
-        const latestBookings = await loadBookings();
-        const matchedBooking = latestBookings.find(
-          (booking) => booking.orderId === paymentOrderId && booking.isPaid,
+        const latest = await loadBookings();
+        const matched = latest.find(
+          (b) => b.orderId === paymentOrderId && b.isPaid
         );
-
-        if (matchedBooking && isMounted) {
+        if (matched && isMounted) {
           setPaymentSyncLoading(false);
           router.replace("/bookinglist");
         }
       } catch (err) {
         if (isMounted) {
-          setError(err instanceof Error ? err.message : "Unexpected error happened");
+          setError(
+            err instanceof Error ? err.message : "Unexpected error happened"
+          );
           setPaymentSyncLoading(false);
         }
       }
     };
-
-    void pollPaymentStatus();
-    const interval = window.setInterval(() => {
-      void pollPaymentStatus();
-    }, 2000);
-
+    void poll();
+    const interval = window.setInterval(() => void poll(), 2000);
     return () => {
       isMounted = false;
       window.clearInterval(interval);
     };
   }, [paymentOrderId, recoveringPayment, router]);
 
-  const pageTitle = useMemo(() => {
-    return role === "DOCTOR" ? "Daftar Booking Pasien" : "Daftar Booking Saya";
-  }, [role]);
-
-  const totalIncome = useMemo(() => {
-    if (!isDoctor) return 0;
-    return bookings.reduce((acc, b) => acc + (b.isPaid ? b.amount : 0), 0);
-  }, [bookings, isDoctor]);
-
-  const totalPatientsServed = useMemo(() => {
-    if (!isDoctor) return 0;
-    return bookings.reduce((acc, b) => acc + (b.isDone ? 1 : 0), 0);
-  }, [bookings, isDoctor]);
-
+  // ── Memos ─────────────────────────────────────────────────────────────────
+  const pageTitle = useMemo(
+    () => (role === "DOCTOR" ? "Daftar Booking Pasien" : "Daftar Booking Saya"),
+    [role]
+  );
+  const totalIncome = useMemo(
+    () =>
+      isDoctor
+        ? bookings.reduce((acc, b) => acc + (b.isPaid ? b.amount : 0), 0)
+        : 0,
+    [bookings, isDoctor]
+  );
+  const totalPatientsServed = useMemo(
+    () =>
+      isDoctor ? bookings.reduce((acc, b) => acc + (b.isDone ? 1 : 0), 0) : 0,
+    [bookings, isDoctor]
+  );
   const getDisplayName = (booking: Booking) => {
     if (role === "DOCTOR") return booking.userName || "";
     if (role === "USER") return booking.staffName || "";
     return `${booking.userName || ""} ${booking.staffName || ""}`.trim();
   };
-
   const filteredBookings = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return bookings.filter((b) => {
@@ -218,6 +224,13 @@ export default function BookingListPage() {
     });
   }, [bookings, searchQuery, paymentFilter, statusFilter, role]);
 
+  // ── Callback ketika review berhasil submit ────────────────────────────────
+  const handleReviewSuccess = (bookingId: string) => {
+    setReviewedIds((prev) => new Set([...prev, bookingId]));
+    setReviewTarget(null);
+  };
+
+  // ── Loading state saat payment recovery ──────────────────────────────────
   if (recoveringPayment && (loading || paymentSyncLoading)) {
     return (
       <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,#eff6ff_0%,#f8fafc_45%,#ffffff_100%)] px-4">
@@ -244,11 +257,13 @@ export default function BookingListPage() {
     );
   }
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <>
       <Navbar />
       <main className="min-h-screen bg-slate-50 px-4 pb-12 pt-28">
         <div className="mx-auto max-w-6xl">
+          {/* Header card */}
           <div className="mb-6 rounded-2xl bg-white p-6 shadow-sm">
             <p className="text-sm font-semibold uppercase tracking-wider text-blue-600">
               Booking List
@@ -274,6 +289,7 @@ export default function BookingListPage() {
               </div>
             )}
 
+            {/* Filters */}
             <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex-1">
                 <input
@@ -282,7 +298,6 @@ export default function BookingListPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
-                  aria-label="Search nama"
                 />
               </div>
               <div className="flex items-center gap-4">
@@ -293,15 +308,7 @@ export default function BookingListPage() {
                       <button
                         key={f}
                         onClick={() => setPaymentFilter(f)}
-                        className={`text-xs px-2 py-1 rounded ${
-                          paymentFilter === f
-                            ? f === "PAID"
-                              ? "bg-green-600 text-white"
-                              : f === "UNPAID"
-                                ? "bg-amber-600 text-white"
-                                : "bg-blue-600 text-white"
-                            : "bg-slate-100"
-                        }`}
+                        className={`text-xs px-2 py-1 rounded ${paymentFilter === f ? (f === "PAID" ? "bg-green-600 text-white" : f === "UNPAID" ? "bg-amber-600 text-white" : "bg-blue-600 text-white") : "bg-slate-100"}`}
                       >
                         {f === "ALL" ? "All" : f === "PAID" ? "Paid" : "Unpaid"}
                       </button>
@@ -315,15 +322,7 @@ export default function BookingListPage() {
                       <button
                         key={f}
                         onClick={() => setStatusFilter(f)}
-                        className={`text-xs px-2 py-1 rounded ${
-                          statusFilter === f
-                            ? f === "DONE"
-                              ? "bg-green-600 text-white"
-                              : f === "UPCOMING"
-                                ? "bg-amber-600 text-white"
-                                : "bg-blue-600 text-white"
-                            : "bg-slate-100"
-                        }`}
+                        className={`text-xs px-2 py-1 rounded ${statusFilter === f ? (f === "DONE" ? "bg-green-600 text-white" : f === "UPCOMING" ? "bg-amber-600 text-white" : "bg-blue-600 text-white") : "bg-slate-100"}`}
                       >
                         {f === "ALL"
                           ? "All"
@@ -349,7 +348,7 @@ export default function BookingListPage() {
 
           {!loading && !error && bookings.length > 0 && (
             <>
-              {/* ── DESKTOP TABLE ─────────────────────────── */}
+              {/* ── DESKTOP TABLE ──────────────────────────────────── */}
               <div className="hidden md:block bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-100">
                 <table className="min-w-full text-sm">
                   <thead className="bg-slate-100 text-left">
@@ -361,14 +360,14 @@ export default function BookingListPage() {
                       <th className="px-4 py-3">Payment</th>
                       <th className="px-4 py-3">Status</th>
                       <th className="px-4 py-3">Action</th>
-                      <th className="px-4 py-3">Sesion</th>
+                      <th className="px-4 py-3">Sesi</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredBookings.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={7}
+                          colSpan={8}
                           className="px-4 py-6 text-center text-slate-500"
                         >
                           No bookings found.
@@ -407,19 +406,14 @@ export default function BookingListPage() {
                           </td>
                           <td className="px-4 py-3">
                             <span
-                              className={`text-xs font-bold px-2 py-1 rounded-full ${
-                                booking.isDone
-                                  ? "bg-slate-100 text-slate-500"
-                                  : "bg-green-100 text-green-700"
-                              }`}
+                              className={`text-xs font-bold px-2 py-1 rounded-full ${booking.isDone ? "bg-slate-100 text-slate-500" : "bg-green-100 text-green-700"}`}
                             >
                               {booking.isDone ? "Done" : "Upcoming"}
                             </span>
                           </td>
-                          {/* ── Action column: sama untuk user & dokter ── */}
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
-                              {/* Pay Now — hanya untuk user yang belum bayar */}
+                              {/* Pay Now */}
                               {!isPsychiatrist && !booking.isPaid && (
                                 <button
                                   onClick={() => handlePay(booking._id)}
@@ -428,9 +422,7 @@ export default function BookingListPage() {
                                   Pay Now
                                 </button>
                               )}
-                              {/* Start Session — sudah bayar, belum selesai */}
-
-                              {/* Brief — hanya dokter */}
+                              {/* Brief — dokter */}
                               {isPsychiatrist && booking.userId && (
                                 <button
                                   onClick={() =>
@@ -441,16 +433,35 @@ export default function BookingListPage() {
                                   Brief
                                 </button>
                               )}
+                              {/* ✅ Tombol Review — hanya user, sesi done, belum review */}
+                              {!isPsychiatrist &&
+                                booking.isDone &&
+                                !reviewedIds.has(booking._id) && (
+                                  <button
+                                    onClick={() => setReviewTarget(booking)}
+                                    className="text-xs px-3 py-1.5 bg-purple-50 text-purple-700 font-semibold rounded-lg hover:bg-purple-100 transition-colors whitespace-nowrap border border-purple-200"
+                                  >
+                                    Beri Review
+                                  </button>
+                                )}
+                              {/* Sudah review */}
+                              {!isPsychiatrist &&
+                                booking.isDone &&
+                                reviewedIds.has(booking._id) && (
+                                  <span className="text-xs px-3 py-1.5 bg-slate-50 text-slate-400 rounded-lg border border-slate-100">
+                                    ✓ Reviewed
+                                  </span>
+                                )}
                             </div>
                           </td>
-                          <div className="px-4 py-3">
+                          <td className="px-4 py-3">
                             {booking.isPaid && !booking.isDone && (
                               <StartSessionButton
                                 bookingId={booking._id}
                                 type={booking.type}
                               />
                             )}
-                          </div>
+                          </td>
                         </tr>
                       ))
                     )}
@@ -458,7 +469,7 @@ export default function BookingListPage() {
                 </table>
               </div>
 
-              {/* ── MOBILE CARDS ──────────────────────────── */}
+              {/* ── MOBILE CARDS ───────────────────────────────────── */}
               <div className="md:hidden space-y-4">
                 {filteredBookings.length === 0 ? (
                   <div className="bg-white p-10 rounded-2xl text-slate-400 text-center shadow-sm">
@@ -483,11 +494,7 @@ export default function BookingListPage() {
                           </span>
                         </div>
                         <span
-                          className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full ${
-                            booking.isDone
-                              ? "bg-slate-100 text-slate-400"
-                              : "bg-green-100 text-green-700"
-                          }`}
+                          className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full ${booking.isDone ? "bg-slate-100 text-slate-400" : "bg-green-100 text-green-700"}`}
                         >
                           {booking.isDone ? "Done" : "Upcoming"}
                         </span>
@@ -535,9 +542,8 @@ export default function BookingListPage() {
                         </div>
                       </div>
 
-                      {/* Action buttons — berdampingan */}
-                      <div className="flex items-center gap-2">
-                        {/* Pay Now — user yang belum bayar */}
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-2 flex-wrap">
                         {!isPsychiatrist && !booking.isPaid && (
                           <button
                             onClick={() => handlePay(booking._id)}
@@ -546,7 +552,6 @@ export default function BookingListPage() {
                             Pay Now
                           </button>
                         )}
-                        {/* Start Session */}
                         {booking.isPaid && !booking.isDone && (
                           <div className="flex-1">
                             <StartSessionButton
@@ -555,7 +560,6 @@ export default function BookingListPage() {
                             />
                           </div>
                         )}
-                        {/* Brief — dokter */}
                         {isPsychiatrist && booking.userId && (
                           <button
                             onClick={() =>
@@ -566,6 +570,24 @@ export default function BookingListPage() {
                             Lihat Brief
                           </button>
                         )}
+                        {/* ✅ Tombol Review mobile */}
+                        {!isPsychiatrist &&
+                          booking.isDone &&
+                          !reviewedIds.has(booking._id) && (
+                            <button
+                              onClick={() => setReviewTarget(booking)}
+                              className="flex-1 text-xs px-4 py-3 bg-purple-50 text-purple-700 font-black rounded-xl border border-purple-200 hover:bg-purple-100 transition-all active:scale-95"
+                            >
+                              Beri Review
+                            </button>
+                          )}
+                        {!isPsychiatrist &&
+                          booking.isDone &&
+                          reviewedIds.has(booking._id) && (
+                            <span className="flex-1 text-center text-xs px-4 py-3 bg-slate-50 text-slate-400 rounded-xl border border-slate-100">
+                              ✓ Reviewed
+                            </span>
+                          )}
                       </div>
                     </div>
                   ))
@@ -581,6 +603,16 @@ export default function BookingListPage() {
           )}
         </div>
       </main>
+
+      {/* ── Review Modal ──────────────────────────────────────── */}
+      {reviewTarget && (
+        <ReviewModal
+          bookingId={reviewTarget._id}
+          staffName={reviewTarget.staffName}
+          onClose={() => setReviewTarget(null)}
+          onSuccess={handleReviewSuccess}
+        />
+      )}
     </>
   );
 }
