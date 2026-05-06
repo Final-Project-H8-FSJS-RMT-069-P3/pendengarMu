@@ -293,9 +293,7 @@ export default function Home() {
               doctor.psychiatristInfo?.experience !== undefined
                 ? `${doctor.psychiatristInfo.experience}+`
                 : "Baru",
-            tags:
-              doctor.psychiatristInfo?.speciality ||
-              DEFAULT_DOCTOR_TAGS,
+            tags: doctor.psychiatristInfo?.speciality || DEFAULT_DOCTOR_TAGS,
             img: DEFAULT_DOCTOR_IMAGES[index % DEFAULT_DOCTOR_IMAGES.length],
           })
         );
@@ -374,8 +372,8 @@ export default function Home() {
                         i === 0
                           ? "bg-blue-200"
                           : i === 1
-                          ? "bg-purple-200"
-                          : "bg-pink-200"
+                            ? "bg-purple-200"
+                            : "bg-pink-200"
                       }`}
                     >
                       {l}
@@ -408,7 +406,10 @@ export default function Home() {
             <div className="grid md:grid-cols-3 gap-8">
               {(() => {
                 const specialtiesLabel =
-                  doctors && doctors.length > 0 && doctors[0].tags && doctors[0].tags.length > 0
+                  doctors &&
+                  doctors.length > 0 &&
+                  doctors[0].tags &&
+                  doctors[0].tags.length > 0
                     ? doctors[0].tags.slice(0, 3).join(", ")
                     : "Online & Offline";
 
@@ -1161,7 +1162,7 @@ export default function Home() {
         </div>
         <div className="max-w-7xl mx-auto px-8 py-6 border-t border-gray-100 text-center">
           <p className="text-gray-400 text-xs">
-            © 2024 pendengarMu. Hak Cipta Dilindungi.
+            © 2026 pendengarMu. Hak Cipta Dilindungi.
           </p>
         </div>
       </footer>
