@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from "react";
 import { StartSessionButton } from "./StartSessionButton";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { ReviewModal } from "./ReviewModal";
 
 type Booking = {
   _id: string;
@@ -94,7 +95,9 @@ export default function BookingListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [clickedDone, setClickedDone] = useState<Record<string, boolean>>({});
-  const [clickedLoading, setClickedLoading] = useState<Record<string, boolean>>({});
+  const [clickedLoading, setClickedLoading] = useState<Record<string, boolean>>(
+    {}
+  );
 
   const [searchQuery, setSearchQuery] = useState("");
   // Payment filter temporarily disabled — commenting out to remove paid/unpaid filtering
@@ -102,7 +105,7 @@ export default function BookingListPage() {
   //   "ALL",
   // );
   const [statusFilter, setStatusFilter] = useState<"ALL" | "DONE" | "UPCOMING">(
-    "ALL",
+    "ALL"
   );
 
   const router = useRouter();
@@ -110,7 +113,7 @@ export default function BookingListPage() {
   const isPsychiatrist =
     sessionRole === "doctor" || sessionRole === "psychiatrist";
   const isDoctor = role === "DOCTOR";
-
+  const [reviewTarget, setReviewTarget] = useState<Booking | null>(null);
   useEffect(() => {
     let isMounted = true;
     const fetchBookings = async () => {
@@ -126,7 +129,7 @@ export default function BookingListPage() {
       } catch (err: unknown) {
         if (isMounted) {
           setError(
-            err instanceof Error ? err.message : "Unexpected error happened",
+            err instanceof Error ? err.message : "Unexpected error happened"
           );
         }
       } finally {
@@ -139,6 +142,15 @@ export default function BookingListPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!loading && bookings.length > 0 && role === "USER") {
+      const doneBooking = bookings.find((b) => b.isDone && !b.isReviewed);
+
+      if (doneBooking) {
+        setReviewTarget(doneBooking);
+      }
+    }
+  }, [loading, bookings, role]);
   async function handleMarkDone(bookingId: string, roomName?: string) {
     try {
       setClickedDone((s) => ({ ...s, [bookingId]: true }));
@@ -271,7 +283,6 @@ export default function BookingListPage() {
               </div>
             </div>
           </div>
-
           {loading && (
             <div className="bg-white p-8 rounded-2xl shadow-sm">Loading...</div>
           )}
@@ -280,7 +291,6 @@ export default function BookingListPage() {
               {error}
             </div>
           )}
-
           {!loading && !error && bookings.length > 0 && (
             <>
               {/* ── DESKTOP TABLE ─────────────────────────── */}
@@ -417,14 +427,14 @@ export default function BookingListPage() {
                               )}
                             </div>
                           </td>
-                            <div className="px-4 py-3">
-                              {booking.isPaid && !booking.isDone && (
-                                <StartSessionButton
-                                  bookingId={booking._id}
-                                  type={booking.type}
-                                />
-                              )}
-                            </div>
+                          <div className="px-4 py-3">
+                            {booking.isPaid && !booking.isDone && (
+                              <StartSessionButton
+                                bookingId={booking._id}
+                                type={booking.type}
+                              />
+                            )}
+                          </div>
                         </tr>
                       ))
                     )}
@@ -586,11 +596,19 @@ export default function BookingListPage() {
               </div>
             </>
           )}
-
           {!loading && !error && bookings.length === 0 && (
             <div className="bg-white p-8 rounded-2xl shadow-sm text-slate-500 text-center">
               Tidak ada booking.
             </div>
+          )}
+
+          {reviewTarget && (
+            <ReviewModal
+              bookingId={reviewTarget._id}
+              staffName={reviewTarget.staffName}
+              onClose={() => setReviewTarget(null)}
+              onSuccess={() => setReviewTarget(null)}
+            />
           )}
         </div>
       </main>
