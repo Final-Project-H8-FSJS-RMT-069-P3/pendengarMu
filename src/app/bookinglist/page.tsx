@@ -23,6 +23,7 @@ type Booking = {
   amount: number;
   isPaid: boolean;
   isDone: boolean;
+  isReviewed?: boolean;
   createdAt: string;
   userName: string;
   staffName: string;
@@ -181,9 +182,20 @@ export default function BookingListPage() {
     return role === "DOCTOR" ? "Daftar Booking Pasien" : "Daftar Booking Saya";
   }, [role]);
 
-  const totalIncome = useMemo(() => {
+  const availableBalance = useMemo(() => {
     if (!isDoctor) return 0;
-    return bookings.reduce((acc, b) => acc + (b.isPaid ? b.amount : 0), 0);
+    return bookings.reduce(
+      (acc, b) => acc + (b.isPaid && b.isDone ? b.amount : 0),
+      0
+    );
+  }, [bookings, isDoctor]);
+
+  const pendingBalance = useMemo(() => {
+    if (!isDoctor) return 0;
+    return bookings.reduce(
+      (acc, b) => acc + (b.isPaid && !b.isDone ? b.amount : 0),
+      0
+    );
   }, [bookings, isDoctor]);
 
   const totalPatientsServed = useMemo(() => {
@@ -225,14 +237,20 @@ export default function BookingListPage() {
             </h1>
 
             {isDoctor && (
-              <div className="mt-4 flex gap-8">
-                <div>
-                  <div className="text-xs text-slate-500">Total Income</div>
-                  <div className="text-xl font-bold text-green-700">
-                    {formatAmount(totalIncome)}
+              <div className="mt-4 flex flex-wrap items-start gap-4">
+                <div className="min-w-35">
+                  <div className="text-xs text-slate-500">Finished Sessions Income</div>
+                  <div className="text-xl font-bold text-emerald-700">
+                    {formatAmount(availableBalance)}
                   </div>
                 </div>
-                <div>
+                <div className="min-w-35">
+                  <div className="text-xs text-slate-500">Pending Income</div>
+                  <div className="text-xl font-bold text-amber-700">
+                    {formatAmount(pendingBalance)}
+                  </div>
+                </div>
+                <div className="min-w-35">
                   <div className="text-xs text-slate-500">Patients Served</div>
                   <div className="text-xl font-bold text-blue-700">
                     {totalPatientsServed}
