@@ -225,8 +225,15 @@ export async function createPrimaryCalendarEvent(
     throw new Error("Google Calendar event created without id/link");
   }
 
+  // Try to find a Meet link from known fields
+  const hangoutLink = (event.data as any).hangoutLink as string | undefined;
+  const entryPoints = (event.data as any).conferenceData?.entryPoints as Array<any> | undefined;
+  const meetEntry = entryPoints?.find((ep) => ep.entryPointType === "video" || ep.entryPointType === "more") || entryPoints?.[0];
+  const meetLink = hangoutLink || meetEntry?.uri || undefined;
+
   return {
     eventId: event.data.id,
     eventLink: event.data.htmlLink,
+    meetLink,
   };
 }

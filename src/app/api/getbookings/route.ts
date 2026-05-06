@@ -39,7 +39,6 @@ export async function GET(req: Request) {
 
       const safe = {
         _id: booking._id?.toString(),
-        orderId: booking.orderId || null,
         userId: booking.userId.toString(),
         staffId: booking.staffId.toString(),
         date: booking.date,
@@ -49,6 +48,8 @@ export async function GET(req: Request) {
         isPaid: booking.isPaid,
         isDone: booking.isDone,
         googleCalendarEventLink: booking.googleCalendarEventLink || null,
+        googleMeetLink: booking.googleMeetLink || null,
+        videoCallUrl: booking.videoCallUrl || null,
         googleCalendarSyncStatus: booking.googleCalendarSyncStatus || null,
         createdAt: booking.createdAt,
         staffName: booking.staff?.name || "Unknown Doctor",
@@ -76,7 +77,6 @@ export async function GET(req: Request) {
 
     const safeBookings = bookings.map((booking) => ({
       _id: booking._id?.toString(),
-      orderId: booking.orderId || null,
       userId: booking.userId.toString(),
       staffId: booking.staffId.toString(),
       date: booking.date,
@@ -86,6 +86,8 @@ export async function GET(req: Request) {
       isPaid: booking.isPaid,
       isDone: booking.isDone,
       googleCalendarEventLink: booking.googleCalendarEventLink || null,
+      googleMeetLink: booking.googleMeetLink || null,
+      videoCallUrl: booking.videoCallUrl || null,
       googleCalendarSyncStatus: booking.googleCalendarSyncStatus || null,
       createdAt: booking.createdAt,
       userName: booking.user?.name || "Unknown User",
