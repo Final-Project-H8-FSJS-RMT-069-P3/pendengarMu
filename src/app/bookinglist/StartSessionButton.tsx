@@ -25,25 +25,6 @@ function StartSessionButton({
     setError("");
 
     try {
-      // Try to fetch booking details first — if a Google Meet link exists for videocall, open it instead
-      if (bookingId && type === "videocall") {
-        try {
-          const bres = await fetch(`/api/getbookings?bookingId=${bookingId}`, { cache: "no-store" });
-          const bjson = await bres.json();
-          if (bres.ok && bjson?.data) {
-            const link = bjson.data.videoCallUrl || bjson.data.googleMeetLink || null;
-            if (link) {
-              // open meet link in new tab/window
-              window.open(link, "_blank");
-              return;
-            }
-          }
-        } catch (err) {
-          // ignore and fall back to normal room creation
-          console.warn("Failed to fetch booking for meet link check", err);
-        }
-      }
-
       // Chat-only: route directly to videocall page in chat-only mode
       if (type === "chat-only") {
         router.push(`/videocall?channel=${bookingId}&mode=chat-only`);

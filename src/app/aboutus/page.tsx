@@ -571,7 +571,7 @@ export default function AboutPage() {
           </div>
           <div className="max-w-7xl mx-auto px-8 py-6 border-t border-gray-100 text-center">
             <p className="text-gray-400 text-xs">
-              © 2026 pendengarMu. Hak Cipta Dilindungi.
+              © 2024 pendengarMu. Hak Cipta Dilindungi.
             </p>
           </div>
         </footer>

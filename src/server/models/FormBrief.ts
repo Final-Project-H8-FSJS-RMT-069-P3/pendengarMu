@@ -9,14 +9,6 @@ export interface IFormBrief {
   user?: IUser;
   brief: string;
   result: string;
-  notes?: INote[];
-  createdAt: Date;
-}
-
-interface INote {
-  staffId: ObjectId;
-  staff?: IUser;
-  content: string;
   createdAt: Date;
 }
 
@@ -52,15 +44,7 @@ export default class FormBrief {
             as: "user",
           },
         },
-        {
-          $lookup: {
-            from: "Users",
-            localField: "notes.staffId",
-            foreignField: "_id",
-            as: "notes.staff",
-          },
-        },
-        { $unwind: "$user, $notes.staff" },
+        { $unwind: "$user" },
       ])
       .toArray()) as IFormBrief[];
     return formBriefs;
@@ -81,32 +65,10 @@ export default class FormBrief {
             as: "user",
           },
         },
-        {
-          $lookup: {
-            from: "Users",
-            localField: "notes.staffId",
-            foreignField: "_id",
-            as: "notes.staff",
-          },
-        },
         { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
-        { $unwind: { path: "$notes.staff"} },
       ])
       .toArray();
 
     return (results[0] as IFormBrief) || null;
   }
-
-  static async addNoteToFormBrief(formBriefId: string, note: INote): Promise<string> {
-    const collection = await this.getCollection();
-    const result = await collection.updateOne(
-      { _id: new ObjectId(formBriefId) },
-      { $push: { notes: note } }
-    );
-    if (!result.matchedCount) {
-      throw new NotFoundError("Form brief not found");
-    }
-    return "Note added successfully";
-  }
-
 }

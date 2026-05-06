@@ -26,12 +26,6 @@ export async function GET() {
         phoneNumber: user.phoneNumber ?? null,
         address: user.address ?? null,
         psychiatristInfo: user.psychiatristInfo ?? null,
-        googleCalendar: {
-          connected: Boolean(user.googleCalendar?.connected),
-          providerEmail: user.googleCalendar?.providerEmail ?? null,
-          connectedAt: user.googleCalendar?.connectedAt ?? null,
-          updatedAt: user.googleCalendar?.updatedAt ?? null,
-        },
       },
     });
   } catch (error: unknown) {

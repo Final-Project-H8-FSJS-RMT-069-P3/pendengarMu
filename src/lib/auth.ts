@@ -45,23 +45,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           email: credentials.email,
         });
 
-        if (!user) {
-          return null;
-        }
+        //! Important: Google-created users may not have password
+        if (!user || !user.password) return null;
 
         const passwordMatch = await bcrypt.compare(
           credentials.password as string,
           user.password,
         );
-
-        if (!passwordMatch) {
-          return null;
-        }
-
-        const role =
-          user.role === "psychiatrist" || user.role === "DOCTOR"
-            ? "DOCTOR"
-            : "USER";
+        if (!passwordMatch) return null;
 
         return {
           id: user._id.toString(),

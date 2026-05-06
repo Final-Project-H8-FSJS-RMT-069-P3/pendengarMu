@@ -4,6 +4,139 @@ import Navbar from "@/components/navbar";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+/*
+const PSIKOLOG = [
+  {
+    doctorId: "66a100000000000000000001",
+    name: "Dina Amalia, M.Psi",
+    role: "Psikolog Klinis Dewasa",
+    harga: 399000,
+    rating: 4.9,
+    reviews: 120,
+    tags: ["Anxiety", "Depression", "Self-Love"],
+    img: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&q=80",
+    mode: "Online & Offline",
+    exp: "6 Tahun",
+    online: true,
+    about:
+      "Spesialis dalam menangani kecemasan, depresi, dan pengembangan cinta diri. Menggunakan pendekatan CBT dan mindfulness yang telah terbukti efektif.",
+    slots: ["09:00", "11:00", "14:00", "16:00"],
+  },
+  {
+    doctorId: "66a100000000000000000002",
+    name: "Rizky Putra, M.Psi",
+    role: "Psikolog Hubungan & Keluarga",
+    harga: 350000,
+    rating: 5.0,
+    reviews: 85,
+    tags: ["Relationship", "Family", "Trauma"],
+    img: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400&q=80",
+    mode: "Online",
+    exp: "8 Tahun",
+    online: true,
+    about:
+      "Ahli dalam dinamika hubungan interpersonal dan konseling keluarga. Membantu pasangan dan keluarga menemukan komunikasi yang lebih sehat.",
+    slots: ["10:00", "13:00", "15:00"],
+  },
+  {
+    doctorId: "66a100000000000000000003",
+    name: "Sarah Wijaya, M.Psi",
+    role: "Psikolog Anak & Remaja",
+    harga: 320000,
+    rating: 4.8,
+    reviews: 210,
+    tags: ["Parenting", "Growth", "Education"],
+    img: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=400&q=80",
+    mode: "Online & Offline",
+    exp: "10 Tahun",
+    online: false,
+    about:
+      "Berpengalaman dalam perkembangan anak dan remaja. Membantu orang tua memahami anak dan mendampingi tumbuh kembang dengan optimal.",
+    slots: ["08:00", "10:00", "14:00", "16:00"],
+  },
+  {
+    doctorId: "66a100000000000000000004",
+    name: "Budi Santoso, M.Psi",
+    role: "Psikolog Klinis & Trauma",
+    harga: 375000,
+    rating: 4.7,
+    reviews: 95,
+    tags: ["Stress", "Burnout", "Trauma"],
+    img: "https://images.unsplash.com/photo-1582750433449-648ed127bb54?w=400&q=80",
+    mode: "Offline",
+    exp: "7 Tahun",
+    online: false,
+    about:
+      "Spesialis pemulihan trauma dan manajemen stres. Menggunakan pendekatan berbasis trauma untuk membantu klien pulih dan bertumbuh.",
+    slots: ["09:00", "11:00", "15:00"],
+  },
+  {
+    doctorId: "66a100000000000000000005",
+    name: "Rina Kusuma, M.Psi",
+    role: "Psikolog Pernikahan & Keluarga",
+    harga: 410000,
+    rating: 5.0,
+    reviews: 150,
+    tags: ["Marriage", "Relationship", "Conflict"],
+    img: "https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=400&q=80",
+    mode: "Online & Offline",
+    exp: "12 Tahun",
+    online: true,
+    about:
+      "Konselor pernikahan bersertifikat dengan keahlian dalam resolusi konflik pasangan dan membangun komunikasi yang bermakna.",
+    slots: ["10:00", "12:00", "14:00", "17:00"],
+  },
+  {
+    doctorId: "66a100000000000000000006",
+    name: "Fajar Ramadhan, M.Psi",
+    role: "Psikolog Klinis & Karir",
+    harga: 360000,
+    rating: 4.8,
+    reviews: 78,
+    tags: ["Burnout", "Self-Love", "Anxiety"],
+    img: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&q=80",
+    mode: "Online",
+    exp: "5 Tahun",
+    online: true,
+    about:
+      "Membantu profesional muda mengatasi burnout, kecemasan karir, dan membangun resiliensi mental di lingkungan kerja yang kompetitif.",
+    slots: ["11:00", "13:00", "16:00", "18:00"],
+  },
+  {
+    doctorId: "66a100000000000000000007",
+    name: "Laila Putri, M.Psi",
+    role: "Psikolog Klinis & Trauma",
+    harga: 380000,
+    rating: 4.9,
+    reviews: 132,
+    tags: ["Trauma", "Depression", "Family"],
+    img: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&q=80",
+    mode: "Online & Offline",
+    exp: "9 Tahun",
+    online: false,
+    about:
+      "Berfokus pada penyembuhan trauma masa kecil dan depresi menggunakan EMDR dan terapi berbasis attachment untuk hasil jangka panjang.",
+    slots: ["09:00", "14:00", "16:00"],
+  },
+  {
+    doctorId: "66a100000000000000000008",
+    name: "Andi Kurniawan, M.Psi",
+    role: "Psikolog Dewasa & Relationship",
+    harga: 340000,
+    rating: 4.7,
+    reviews: 63,
+    tags: ["Relationship", "Anxiety", "Growth"],
+    img: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400&q=80",
+    mode: "Online",
+    exp: "4 Tahun",
+    online: true,
+    about:
+      "Fokus pada konseling hubungan dewasa muda dan manajemen kecemasan. Pendekatan hangat dan non-judgmental untuk ruang yang aman berbicara.",
+    slots: ["10:00", "12:00", "15:00", "17:00"],
+  },
+];
+*/
+
 type ApiDoctor = {
   _id: string;
   name: string;
@@ -17,7 +150,6 @@ type ApiDoctor = {
     scheduleDays?: string[];
     scheduleTimes?: string[];
     speciality?: string[];
-    imageUrl?: string; // ← tambah ini
   };
 };
 
@@ -29,13 +161,24 @@ type DoctorCard = {
   rating: number;
   reviews: number;
   tags: string[];
-  imageUrl?: string;
+  img: string;
   mode: string;
   exp: string;
   online: boolean;
   about: string;
   slots: string[];
 };
+
+const FALLBACK_IMAGES = [
+  "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&q=80",
+  "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400&q=80",
+  "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=400&q=80",
+  "https://images.unsplash.com/photo-1582750433449-648ed127bb54?w=400&q=80",
+  "https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=400&q=80",
+  "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&q=80",
+  "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&q=80",
+  "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400&q=80",
+];
 
 const FALLBACK_TAGS = [
   ["Anxiety", "Self-Love"],
@@ -45,15 +188,6 @@ const FALLBACK_TAGS = [
 ];
 
 const FALLBACK_SLOTS = ["09:00", "11:00", "14:00", "16:00"];
-
-function getInitials(name: string) {
-  return name
-    .split(" ")
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-}
 
 function toDoctorCard(doctor: ApiDoctor, index: number): DoctorCard {
   const fallbackTags = FALLBACK_TAGS[index % FALLBACK_TAGS.length];
@@ -74,7 +208,7 @@ function toDoctorCard(doctor: ApiDoctor, index: number): DoctorCard {
     rating: 4.7 + (index % 3) * 0.1,
     reviews: 50 + index * 7,
     tags: tags,
-    imageUrl: doctor.psychiatristInfo?.imageUrl, // dari API, tidak ada fallback
+    img: FALLBACK_IMAGES[index % FALLBACK_IMAGES.length],
     mode: modeLabel,
     exp: `${experience ?? 5} Tahun`,
     online: true,
@@ -114,10 +248,12 @@ export default function ListPsikolog() {
   const router = useRouter();
   const [doctors, setDoctors] = useState<DoctorCard[]>([]);
   const [query, setQuery] = useState("");
+  const [modeFilter, setModeFilter] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
   const [sortKey, setSortKey] = useState("rating");
   const [displayed, setDisplayed] = useState(6);
   const [modal, setModal] = useState<DoctorCard | null>(null);
+
   const [toast, setToast] = useState({ msg: "", show: false });
 
   const showToast = (msg: string) => {
@@ -134,7 +270,10 @@ export default function ListPsikolog() {
     async function fetchDoctors() {
       try {
         const response = await fetch("/api/getdoctors", { cache: "no-store" });
-        if (!response.ok) throw new Error("Failed to fetch doctors");
+        if (!response.ok) {
+          throw new Error("Failed to fetch doctors");
+        }
+
         const payload = (await response.json()) as { data?: ApiDoctor[] };
         const fetchedDoctors = (payload.data ?? []).map((doctor, index) =>
           toDoctorCard(doctor, index)
@@ -145,6 +284,7 @@ export default function ListPsikolog() {
         showToast("Gagal mengambil data dokter. Coba lagi.");
       }
     }
+
     fetchDoctors();
   }, []);
 
@@ -298,29 +438,20 @@ export default function ListPsikolog() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {filtered.slice(0, displayed).map((p, i) => (
                 <div
-                  key={p.doctorId}
-                  onClick={() => setModal(p)}
+                  key={p.name}
+                  onClick={() => {
+                    setModal(p);
+                  }}
                   className="bg-white rounded-[24px] overflow-hidden border border-gray-200 hover:border-blue-200 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1.5 cursor-pointer group"
                   style={{ animationDelay: `${i * 60}ms` }}
                 >
-                  {/* ── Foto / Inisial ── */}
                   <div className="relative h-56 overflow-hidden bg-blue-50">
-                    {p.imageUrl ? (
-                      <img
-                        src={p.imageUrl}
-                        alt={p.name}
-                        className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-600 to-blue-400 group-hover:scale-105 transition-transform duration-500">
-                        <span className="text-5xl font-black text-white select-none">
-                          {getInitials(p.name)}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Badge Terverifikasi */}
+                    <img
+                      src={p.img}
+                      alt={p.name}
+                      className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
+                      loading="lazy"
+                    />
                     <div className="absolute top-3.5 left-3.5 flex items-center gap-1.5 bg-blue-900/85 backdrop-blur-sm text-white text-[11px] font-bold px-2.5 py-1 rounded-full">
                       <svg
                         className="w-3 h-3"
@@ -335,8 +466,6 @@ export default function ListPsikolog() {
                       </svg>
                       Terverifikasi
                     </div>
-
-                    {/* Badge Online/Offline */}
                     {p.online ? (
                       <div className="absolute top-3.5 right-3.5 flex items-center gap-1.5 bg-white/90 backdrop-blur-sm text-green-600 text-[11px] font-bold px-2.5 py-1 rounded-full">
                         <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
@@ -348,8 +477,6 @@ export default function ListPsikolog() {
                         Offline
                       </div>
                     )}
-
-                    {/* Badge Rating */}
                     <div className="absolute bottom-3.5 right-3.5 flex items-center gap-1 bg-white/95 backdrop-blur-sm px-2.5 py-1 rounded-full text-xs font-bold text-gray-900 shadow-md">
                       <svg
                         className="w-3.5 h-3.5 text-yellow-400"
@@ -364,8 +491,6 @@ export default function ListPsikolog() {
                       </span>
                     </div>
                   </div>
-
-                  {/* ── Info Card ── */}
                   <div className="p-5">
                     <h3 className="text-lg font-black text-blue-900 mb-0.5 tracking-tight">
                       {p.name}
@@ -470,7 +595,6 @@ export default function ListPsikolog() {
           </div>
         )}
 
-        {/* ── Modal ── */}
         {modal && (
           <div
             className="fixed inset-0 bg-black/45 z-50 flex items-center justify-center p-4"
@@ -488,21 +612,11 @@ export default function ListPsikolog() {
                   ✕
                 </button>
                 <div className="flex gap-4 items-start mb-6">
-                  {/* ── Foto / Inisial di Modal ── */}
-                  {modal.imageUrl ? (
-                    <img
-                      src={modal.imageUrl}
-                      alt={modal.name}
-                      className="w-20 h-20 rounded-2xl object-cover object-top border-2 border-blue-50 shrink-0"
-                    />
-                  ) : (
-                    <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-400 border-2 border-blue-50 shrink-0 flex items-center justify-center">
-                      <span className="text-2xl font-black text-white select-none">
-                        {getInitials(modal.name)}
-                      </span>
-                    </div>
-                  )}
-
+                  <img
+                    src={modal.img}
+                    alt={modal.name}
+                    className="w-20 h-20 rounded-2xl object-cover object-top border-2 border-blue-50 shrink-0"
+                  />
                   <div>
                     <h2 className="text-xl font-black text-blue-900 tracking-tight mb-0.5">
                       {modal.name}
@@ -534,7 +648,6 @@ export default function ListPsikolog() {
                     </div>
                   </div>
                 </div>
-
                 <div className="mb-5">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wide mb-2">
                     Tentang
