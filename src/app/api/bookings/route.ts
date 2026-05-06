@@ -76,16 +76,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const result = await db.collection("UserBookings").insertOne(bookingData);
-
-    const roomName = `room-${result.insertedId.toString()}`;
-
-    await db.collection("Rooms").insertOne({
-      userId: bookingData.userId,
-      staffId: bookingData.staffId,
-      roomName: roomName,
-      createdAt: new Date(),
-    });
+    // Do NOT create the booking yet. Create an Order that carries the booking payload
+    // and only create the actual UserBookings record after payment is confirmed.
 
     console.log("aku disini");
 
@@ -111,7 +103,7 @@ export async function POST(req: Request) {
       minute: "2-digit",
     });
 
-    const orderId = `ORDER-${result.insertedId.toString()}`;
+    const orderId = `ORDER-${new ObjectId().toString()}`;
 
     const snap = new midtransClient.Snap({
       isProduction: process.env.MIDTRANS_IS_PRODUCTION === "true",
@@ -140,7 +132,7 @@ export async function POST(req: Request) {
         secure: true,
       },
       callbacks: {
-        finish: `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/bookinglist`,
+        finish: `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/payment/loading?orderId=${orderId}`,
       },
     };
 
@@ -154,7 +146,9 @@ export async function POST(req: Request) {
     await db.collection("Orders").insertOne({
       userId: new ObjectId(session.user.id),
       orderId,
-      bookingId: new ObjectId(result.insertedId),
+      // booking will be created after payment confirmation
+      bookingId: null,
+      bookingPayload: bookingData,
       items: parameter.item_details,
       totalAmount: bookingData.amount,
       status: "pending",
@@ -167,8 +161,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         message: "Booking created successfully",
-        bookingId: result.insertedId,
-        roomName: roomName,
+        orderId,
         redirect_url: transaction.redirect_url,
         token: transaction.token,
       },
