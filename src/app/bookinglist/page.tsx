@@ -6,15 +6,15 @@ declare global {
 }
 
 import Navbar from "@/components/navbar";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { StartSessionButton } from "./StartSessionButton";
-import { ReviewModal } from "./ReviewModal";
 import { useSession } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { ReviewModal } from "./ReviewModal";
 
 type Booking = {
   _id: string;
-  orderId?: string | null;
   userId: string;
   staffId: string;
   date: string;
@@ -34,7 +34,6 @@ type BookingApiResponse = {
   data?: Booking[];
 };
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
 const formatDateTime = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Invalid date";
@@ -43,12 +42,15 @@ const formatDateTime = (value: string) => {
     timeStyle: "short",
   });
 };
-const formatAmount = (amount: number) =>
-  new Intl.NumberFormat("id-ID", {
+
+const formatAmount = (amount: number) => {
+  return new Intl.NumberFormat("id-ID", {
     style: "currency",
     currency: "IDR",
     maximumFractionDigits: 0,
   }).format(amount || 0);
+};
+
 const formatSessionType = (type?: string) => {
   switch (type) {
     case "videocall":
@@ -65,205 +67,155 @@ const handlePay = async (bookingId: string) => {
   try {
     const res = await fetch("/api/token-payment", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({ bookingId }),
     });
+
     const data = await res.json();
+
     if (!res.ok) throw new Error(data.message);
-    if (window.snap) window.snap.pay(data.token);
-    else alert("Midtrans Snap belum load");
+
+    if (window.snap) {
+      window.snap.pay(data.token);
+    } else {
+      alert("Midtrans Snap belum load");
+    }
   } catch (err) {
     console.error(err);
     alert("Gagal memulai pembayaran");
   }
 };
 
-// ── Component ─────────────────────────────────────────────────────────────────
 export default function BookingListPage() {
   const { data: session } = useSession();
-  const searchParams = useSearchParams();
-  const router = useRouter();
-
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [role, setRole] = useState<"USER" | "DOCTOR" | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [paymentSyncLoading, setPaymentSyncLoading] = useState(false);
-
-  // ID booking yang sudah pernah di-review oleh user ini
-  const [reviewedIds, setReviewedIds] = useState<Set<string>>(new Set());
-  // Booking yang sedang dibuka modal review-nya
-  const [reviewTarget, setReviewTarget] = useState<Booking | null>(null);
+  const [clickedDone, setClickedDone] = useState<Record<string, boolean>>({});
+  const [clickedLoading, setClickedLoading] = useState<Record<string, boolean>>(
+    {}
+  );
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [paymentFilter, setPaymentFilter] = useState<"ALL" | "PAID" | "UNPAID">(
-    "ALL"
-  );
+  // Payment filter temporarily disabled — commenting out to remove paid/unpaid filtering
+  // const [paymentFilter, setPaymentFilter] = useState<"ALL" | "PAID" | "UNPAID">(
+  //   "ALL",
+  // );
   const [statusFilter, setStatusFilter] = useState<"ALL" | "DONE" | "UPCOMING">(
     "ALL"
   );
 
-  const paymentState = searchParams.get("payment");
-  const paymentOrderId = searchParams.get("order_id");
-  const recoveringPayment = paymentState === "processing" && !!paymentOrderId;
-
+  const router = useRouter();
   const sessionRole = String(session?.user?.role || "").toLowerCase();
   const isPsychiatrist =
     sessionRole === "doctor" || sessionRole === "psychiatrist";
   const isDoctor = role === "DOCTOR";
-
-  // ── Fetch bookings ────────────────────────────────────────────────────────
-  const loadBookings = async () => {
-    const response = await fetch("/api/getbookings", { cache: "no-store" });
-    const payload = (await response.json()) as BookingApiResponse;
-    if (!response.ok)
-      throw new Error(payload.message || "Failed to fetch bookings");
-    setBookings(payload.data || []);
-    setRole(payload.role || null);
-    return payload.data || [];
-  };
-
-  // ── Fetch reviewed booking IDs (hanya untuk USER) ────────────────────────
-  const loadReviewedIds = async () => {
-    try {
-      const res = await fetch("/api/reviews/me");
-      if (!res.ok) return;
-      const json = (await res.json()) as { data: string[] };
-      setReviewedIds(new Set(json.data));
-    } catch {
-      // non-critical, abaikan
-    }
-  };
-
+  const [reviewTarget, setReviewTarget] = useState<Booking | null>(null);
   useEffect(() => {
     let isMounted = true;
-    const init = async () => {
+    const fetchBookings = async () => {
       try {
+        const response = await fetch("/api/getbookings", { cache: "no-store" });
+        const payload = (await response.json()) as BookingApiResponse;
+        if (!response.ok)
+          throw new Error(payload.message || "Failed to fetch bookings");
         if (isMounted) {
-          await Promise.all([loadBookings(), loadReviewedIds()]);
+          setBookings(payload.data || []);
+          setRole(payload.role || null);
         }
       } catch (err: unknown) {
-        if (isMounted)
+        if (isMounted) {
           setError(
             err instanceof Error ? err.message : "Unexpected error happened"
           );
+        }
       } finally {
         if (isMounted) setLoading(false);
       }
     };
-    void init();
+    fetchBookings();
     return () => {
       isMounted = false;
     };
   }, []);
 
-  // ── Polling setelah payment ───────────────────────────────────────────────
   useEffect(() => {
-    if (!recoveringPayment) return;
-    let isMounted = true;
-    setPaymentSyncLoading(true);
-    const poll = async () => {
-      try {
-        const latest = await loadBookings();
-        const matched = latest.find(
-          (b) => b.orderId === paymentOrderId && b.isPaid
-        );
-        if (matched && isMounted) {
-          setPaymentSyncLoading(false);
-          router.replace("/bookinglist");
-        }
-      } catch (err) {
-        if (isMounted) {
-          setError(
-            err instanceof Error ? err.message : "Unexpected error happened"
-          );
-          setPaymentSyncLoading(false);
-        }
-      }
-    };
-    void poll();
-    const interval = window.setInterval(() => void poll(), 2000);
-    return () => {
-      isMounted = false;
-      window.clearInterval(interval);
-    };
-  }, [paymentOrderId, recoveringPayment, router]);
+    if (!loading && bookings.length > 0 && role === "USER") {
+      const doneBooking = bookings.find((b) => b.isDone && !b.isReviewed);
 
-  // ── Memos ─────────────────────────────────────────────────────────────────
-  const pageTitle = useMemo(
-    () => (role === "DOCTOR" ? "Daftar Booking Pasien" : "Daftar Booking Saya"),
-    [role]
-  );
-  const totalIncome = useMemo(
-    () =>
-      isDoctor
-        ? bookings.reduce((acc, b) => acc + (b.isPaid ? b.amount : 0), 0)
-        : 0,
-    [bookings, isDoctor]
-  );
-  const totalPatientsServed = useMemo(
-    () =>
-      isDoctor ? bookings.reduce((acc, b) => acc + (b.isDone ? 1 : 0), 0) : 0,
-    [bookings, isDoctor]
-  );
+      if (doneBooking) {
+        setReviewTarget(doneBooking);
+      }
+    }
+  }, [loading, bookings, role]);
+  async function handleMarkDone(bookingId: string, roomName?: string) {
+    try {
+      setClickedDone((s) => ({ ...s, [bookingId]: true }));
+      setClickedLoading((s) => ({ ...s, [bookingId]: true }));
+      const channel = roomName || bookingId;
+      const res = await fetch("/api/video/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "end-room", channelName: channel }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || "Failed to mark done");
+      // refresh bookings
+      const resp = await fetch("/api/getbookings", { cache: "no-store" });
+      const payload = await resp.json();
+      if (resp.ok) setBookings(payload.data || []);
+      else console.warn("Failed refresh after mark done", payload);
+      setClickedLoading((s) => ({ ...s, [bookingId]: false }));
+    } catch (err) {
+      console.error(err);
+      setClickedDone((s) => ({ ...s, [bookingId]: false }));
+      setClickedLoading((s) => ({ ...s, [bookingId]: false }));
+      alert("Gagal menandai selesai");
+    }
+  }
+
+  const pageTitle = useMemo(() => {
+    return role === "DOCTOR" ? "Daftar Booking Pasien" : "Daftar Booking Saya";
+  }, [role]);
+
+  const totalIncome = useMemo(() => {
+    if (!isDoctor) return 0;
+    return bookings.reduce((acc, b) => acc + (b.isPaid ? b.amount : 0), 0);
+  }, [bookings, isDoctor]);
+
+  const totalPatientsServed = useMemo(() => {
+    if (!isDoctor) return 0;
+    return bookings.reduce((acc, b) => acc + (b.isDone ? 1 : 0), 0);
+  }, [bookings, isDoctor]);
+
   const getDisplayName = (booking: Booking) => {
     if (role === "DOCTOR") return booking.userName || "";
     if (role === "USER") return booking.staffName || "";
     return `${booking.userName || ""} ${booking.staffName || ""}`.trim();
   };
+
   const filteredBookings = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return bookings.filter((b) => {
       const name = getDisplayName(b).toLowerCase();
       if (q && !name.includes(q)) return false;
-      if (paymentFilter === "PAID" && !b.isPaid) return false;
-      if (paymentFilter === "UNPAID" && b.isPaid) return false;
+      // payment filter disabled
+      // if (paymentFilter === "PAID" && !b.isPaid) return false;
+      // if (paymentFilter === "UNPAID" && b.isPaid) return false;
       if (statusFilter === "DONE" && !b.isDone) return false;
       if (statusFilter === "UPCOMING" && b.isDone) return false;
       return true;
     });
-  }, [bookings, searchQuery, paymentFilter, statusFilter, role]);
+  }, [bookings, searchQuery, statusFilter, role]);
 
-  // ── Callback ketika review berhasil submit ────────────────────────────────
-  const handleReviewSuccess = (bookingId: string) => {
-    setReviewedIds((prev) => new Set([...prev, bookingId]));
-    setReviewTarget(null);
-  };
-
-  // ── Loading state saat payment recovery ──────────────────────────────────
-  if (recoveringPayment && (loading || paymentSyncLoading)) {
-    return (
-      <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,#eff6ff_0%,#f8fafc_45%,#ffffff_100%)] px-4">
-        <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(59,130,246,0.08),rgba(15,23,42,0.03),rgba(14,165,233,0.08))]" />
-        <div className="relative w-full max-w-xl rounded-3xl border border-white/70 bg-white/90 p-8 text-center shadow-[0_20px_60px_rgba(15,23,42,0.12)] backdrop-blur">
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full border border-blue-100 bg-blue-50">
-            <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" />
-          </div>
-          <p className="text-xs font-bold uppercase tracking-[0.28em] text-blue-600">
-            Payment Processing
-          </p>
-          <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-900">
-            Menyelesaikan pembayaran Anda
-          </h1>
-          <p className="mt-4 text-sm leading-6 text-slate-600">
-            Booking Anda sedang disinkronkan. Halaman ini akan otomatis
-            memperbarui begitu status paid masuk ke database.
-          </p>
-          <div className="mt-6 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700">
-            Mohon tunggu sebentar, kami sedang memeriksa konfirmasi pembayaran.
-          </div>
-        </div>
-      </main>
-    );
-  }
-
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <>
       <Navbar />
       <main className="min-h-screen bg-slate-50 px-4 pb-12 pt-28">
         <div className="mx-auto max-w-6xl">
-          {/* Header card */}
           <div className="mb-6 rounded-2xl bg-white p-6 shadow-sm">
             <p className="text-sm font-semibold uppercase tracking-wider text-blue-600">
               Booking List
@@ -289,7 +241,6 @@ export default function BookingListPage() {
               </div>
             )}
 
-            {/* Filters */}
             <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex-1">
                 <input
@@ -298,23 +249,11 @@ export default function BookingListPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+                  aria-label="Search nama"
                 />
               </div>
               <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500">Payment</span>
-                  <div className="flex gap-2">
-                    {(["ALL", "PAID", "UNPAID"] as const).map((f) => (
-                      <button
-                        key={f}
-                        onClick={() => setPaymentFilter(f)}
-                        className={`text-xs px-2 py-1 rounded ${paymentFilter === f ? (f === "PAID" ? "bg-green-600 text-white" : f === "UNPAID" ? "bg-amber-600 text-white" : "bg-blue-600 text-white") : "bg-slate-100"}`}
-                      >
-                        {f === "ALL" ? "All" : f === "PAID" ? "Paid" : "Unpaid"}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                {/* Payment filter removed */}
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-slate-500">Status</span>
                   <div className="flex gap-2">
@@ -322,12 +261,20 @@ export default function BookingListPage() {
                       <button
                         key={f}
                         onClick={() => setStatusFilter(f)}
-                        className={`text-xs px-2 py-1 rounded ${statusFilter === f ? (f === "DONE" ? "bg-green-600 text-white" : f === "UPCOMING" ? "bg-amber-600 text-white" : "bg-blue-600 text-white") : "bg-slate-100"}`}
+                        className={`text-xs px-2 py-1 rounded ${
+                          statusFilter === f
+                            ? f === "DONE"
+                              ? "bg-green-600 text-white"
+                              : f === "UPCOMING"
+                                ? "bg-amber-600 text-white"
+                                : "bg-blue-600 text-white"
+                            : "bg-slate-100"
+                        }`}
                       >
                         {f === "ALL"
                           ? "All"
                           : f === "DONE"
-                            ? "Done"
+                            ? "Closed"
                             : "Upcoming"}
                       </button>
                     ))}
@@ -336,7 +283,6 @@ export default function BookingListPage() {
               </div>
             </div>
           </div>
-
           {loading && (
             <div className="bg-white p-8 rounded-2xl shadow-sm">Loading...</div>
           )}
@@ -345,10 +291,9 @@ export default function BookingListPage() {
               {error}
             </div>
           )}
-
           {!loading && !error && bookings.length > 0 && (
             <>
-              {/* ── DESKTOP TABLE ──────────────────────────────────── */}
+              {/* ── DESKTOP TABLE ─────────────────────────── */}
               <div className="hidden md:block bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-100">
                 <table className="min-w-full text-sm">
                   <thead className="bg-slate-100 text-left">
@@ -360,14 +305,14 @@ export default function BookingListPage() {
                       <th className="px-4 py-3">Payment</th>
                       <th className="px-4 py-3">Status</th>
                       <th className="px-4 py-3">Action</th>
-                      <th className="px-4 py-3">Sesi</th>
+                      <th className="px-4 py-3">Sesion</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredBookings.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={8}
+                          colSpan={7}
                           className="px-4 py-6 text-center text-slate-500"
                         >
                           No bookings found.
@@ -406,14 +351,19 @@ export default function BookingListPage() {
                           </td>
                           <td className="px-4 py-3">
                             <span
-                              className={`text-xs font-bold px-2 py-1 rounded-full ${booking.isDone ? "bg-slate-100 text-slate-500" : "bg-green-100 text-green-700"}`}
+                              className={`text-xs font-bold px-2 py-1 rounded-full ${
+                                booking.isDone
+                                  ? "bg-slate-100 text-slate-500"
+                                  : "bg-green-100 text-green-700"
+                              }`}
                             >
-                              {booking.isDone ? "Done" : "Upcoming"}
+                              {booking.isDone ? "Closed" : "Upcoming"}
                             </span>
                           </td>
+                          {/* ── Action column: sama untuk user & dokter ── */}
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
-                              {/* Pay Now */}
+                              {/* Pay Now — hanya untuk user yang belum bayar */}
                               {!isPsychiatrist && !booking.isPaid && (
                                 <button
                                   onClick={() => handlePay(booking._id)}
@@ -422,7 +372,9 @@ export default function BookingListPage() {
                                   Pay Now
                                 </button>
                               )}
-                              {/* Brief — dokter */}
+                              {/* Start Session — sudah bayar, belum selesai */}
+
+                              {/* Brief — hanya dokter */}
                               {isPsychiatrist && booking.userId && (
                                 <button
                                   onClick={() =>
@@ -433,35 +385,56 @@ export default function BookingListPage() {
                                   Brief
                                 </button>
                               )}
-                              {/* ✅ Tombol Review — hanya user, sesi done, belum review */}
-                              {!isPsychiatrist &&
-                                booking.isDone &&
-                                !reviewedIds.has(booking._id) && (
-                                  <button
-                                    onClick={() => setReviewTarget(booking)}
-                                    className="text-xs px-3 py-1.5 bg-purple-50 text-purple-700 font-semibold rounded-lg hover:bg-purple-100 transition-colors whitespace-nowrap border border-purple-200"
-                                  >
-                                    Beri Review
-                                  </button>
-                                )}
-                              {/* Sudah review */}
-                              {!isPsychiatrist &&
-                                booking.isDone &&
-                                reviewedIds.has(booking._id) && (
-                                  <span className="text-xs px-3 py-1.5 bg-slate-50 text-slate-400 rounded-lg border border-slate-100">
-                                    ✓ Reviewed
-                                  </span>
-                                )}
+                              {/* Done button - both roles can mark done */}
+                              {!booking.isDone && (
+                                <button
+                                  onClick={() => handleMarkDone(booking._id)}
+                                  disabled={!!clickedDone[booking._id]}
+                                  className={`text-xs px-3 py-1.5 font-semibold rounded-lg transition-colors whitespace-nowrap border ${
+                                    clickedDone[booking._id]
+                                      ? "bg-slate-100 text-slate-600 border-slate-200 cursor-not-allowed"
+                                      : "bg-green-50 text-green-700 border-green-100 hover:bg-green-100"
+                                  }`}
+                                >
+                                  {clickedLoading[booking._id] ? (
+                                    <span className="inline-flex items-center">
+                                      <svg
+                                        className="animate-spin h-4 w-4 mr-2 text-slate-600"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <circle
+                                          className="opacity-25"
+                                          cx="12"
+                                          cy="12"
+                                          r="10"
+                                          stroke="currentColor"
+                                          strokeWidth="4"
+                                        ></circle>
+                                        <path
+                                          className="opacity-75"
+                                          fill="currentColor"
+                                          d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                                        ></path>
+                                      </svg>
+                                      Done
+                                    </span>
+                                  ) : (
+                                    "Done"
+                                  )}
+                                </button>
+                              )}
                             </div>
                           </td>
-                          <td className="px-4 py-3">
+                          <div className="px-4 py-3">
                             {booking.isPaid && !booking.isDone && (
                               <StartSessionButton
                                 bookingId={booking._id}
                                 type={booking.type}
                               />
                             )}
-                          </td>
+                          </div>
                         </tr>
                       ))
                     )}
@@ -469,7 +442,7 @@ export default function BookingListPage() {
                 </table>
               </div>
 
-              {/* ── MOBILE CARDS ───────────────────────────────────── */}
+              {/* ── MOBILE CARDS ──────────────────────────── */}
               <div className="md:hidden space-y-4">
                 {filteredBookings.length === 0 ? (
                   <div className="bg-white p-10 rounded-2xl text-slate-400 text-center shadow-sm">
@@ -494,7 +467,11 @@ export default function BookingListPage() {
                           </span>
                         </div>
                         <span
-                          className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full ${booking.isDone ? "bg-slate-100 text-slate-400" : "bg-green-100 text-green-700"}`}
+                          className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full ${
+                            booking.isDone
+                              ? "bg-slate-100 text-slate-400"
+                              : "bg-green-100 text-green-700"
+                          }`}
                         >
                           {booking.isDone ? "Done" : "Upcoming"}
                         </span>
@@ -542,8 +519,9 @@ export default function BookingListPage() {
                         </div>
                       </div>
 
-                      {/* Action buttons */}
-                      <div className="flex items-center gap-2 flex-wrap">
+                      {/* Action buttons — berdampingan */}
+                      <div className="flex items-center gap-2">
+                        {/* Pay Now — user yang belum bayar */}
                         {!isPsychiatrist && !booking.isPaid && (
                           <button
                             onClick={() => handlePay(booking._id)}
@@ -552,6 +530,7 @@ export default function BookingListPage() {
                             Pay Now
                           </button>
                         )}
+                        {/* Start Session */}
                         {booking.isPaid && !booking.isDone && (
                           <div className="flex-1">
                             <StartSessionButton
@@ -560,6 +539,7 @@ export default function BookingListPage() {
                             />
                           </div>
                         )}
+                        {/* Brief — dokter */}
                         {isPsychiatrist && booking.userId && (
                           <button
                             onClick={() =>
@@ -570,24 +550,45 @@ export default function BookingListPage() {
                             Lihat Brief
                           </button>
                         )}
-                        {/* ✅ Tombol Review mobile */}
-                        {!isPsychiatrist &&
-                          booking.isDone &&
-                          !reviewedIds.has(booking._id) && (
-                            <button
-                              onClick={() => setReviewTarget(booking)}
-                              className="flex-1 text-xs px-4 py-3 bg-purple-50 text-purple-700 font-black rounded-xl border border-purple-200 hover:bg-purple-100 transition-all active:scale-95"
-                            >
-                              Beri Review
-                            </button>
-                          )}
-                        {!isPsychiatrist &&
-                          booking.isDone &&
-                          reviewedIds.has(booking._id) && (
-                            <span className="flex-1 text-center text-xs px-4 py-3 bg-slate-50 text-slate-400 rounded-xl border border-slate-100">
-                              ✓ Reviewed
-                            </span>
-                          )}
+                        {!booking.isDone && (
+                          <button
+                            onClick={() => handleMarkDone(booking._id)}
+                            disabled={!!clickedDone[booking._id]}
+                            className={`flex-1 text-xs px-4 py-3 font-black rounded-xl border transition-all active:scale-95 ${
+                              clickedDone[booking._id]
+                                ? "bg-slate-100 text-slate-600 border-slate-200 cursor-not-allowed"
+                                : "bg-green-50 text-green-700 border-green-100 hover:bg-green-100"
+                            }`}
+                          >
+                            {clickedLoading[booking._id] ? (
+                              <span className="inline-flex items-center justify-center">
+                                <svg
+                                  className="animate-spin h-4 w-4 mr-2 text-slate-600"
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <circle
+                                    className="opacity-25"
+                                    cx="12"
+                                    cy="12"
+                                    r="10"
+                                    stroke="currentColor"
+                                    strokeWidth="4"
+                                  ></circle>
+                                  <path
+                                    className="opacity-75"
+                                    fill="currentColor"
+                                    d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                                  ></path>
+                                </svg>
+                                Done
+                              </span>
+                            ) : (
+                              "Done"
+                            )}
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))
@@ -595,24 +596,22 @@ export default function BookingListPage() {
               </div>
             </>
           )}
-
           {!loading && !error && bookings.length === 0 && (
             <div className="bg-white p-8 rounded-2xl shadow-sm text-slate-500 text-center">
               Tidak ada booking.
             </div>
           )}
+
+          {reviewTarget && (
+            <ReviewModal
+              bookingId={reviewTarget._id}
+              staffName={reviewTarget.staffName}
+              onClose={() => setReviewTarget(null)}
+              onSuccess={() => setReviewTarget(null)}
+            />
+          )}
         </div>
       </main>
-
-      {/* ── Review Modal ──────────────────────────────────────── */}
-      {reviewTarget && (
-        <ReviewModal
-          bookingId={reviewTarget._id}
-          staffName={reviewTarget.staffName}
-          onClose={() => setReviewTarget(null)}
-          onSuccess={handleReviewSuccess}
-        />
-      )}
     </>
   );
 }

@@ -4,11 +4,8 @@ import { auth } from "@/lib/auth";
 import { getDB } from "../../../server/config/mongodb"; //<-- import dari src yg bener
 import { ObjectId } from "mongodb"; //<-- import dari src yg bener
 import User from "@/server/models/User";
-import Order from "@/server/models/Order";
 
 export async function POST(req: Request) {
-  let orderId: string | null = null;
-
   try {
     const session = await auth();
 
@@ -53,70 +50,60 @@ export async function POST(req: Request) {
         : sessionType === "chat"
           ? "chat-only"
           : "offline";
-    const bookingDraft = {
-      userId: session.user.id,
-      staffId,
-      formBriefId: formBriefId || null,
+
+    const bookingData = {
+      userId: new ObjectId(session.user.id),
+      staffId: new ObjectId(staffId),
+      formBriefId: formBriefId ? new ObjectId(formBriefId) : null,
       date: dateObj,
       sessionDuration: parseInt(sessionDuration) || 30,
-      amount: parseFloat(amount) || 0,
+      amount: Math.round(parseFloat(amount) || 0),
       type: mapType,
-    } as const;
+      isPaid: false,
+      isDone: false,
+      createdAt: new Date(),
+    };
 
     // Prevent double-booking for the exact same staff and datetime
-    const existingBooking = await db.collection("UserBookings").findOne({
+    const existing = await db.collection("UserBookings").findOne({
       staffId: new ObjectId(staffId),
-      date: bookingDraft.date,
+      date: bookingData.date,
     });
-    const existingPendingOrder = await db.collection("Orders").findOne({
-      "bookingDraft.staffId": staffId,
-      "bookingDraft.date": bookingDraft.date,
-      status: { $in: ["pending", "success"] },
-    });
-    if (existingBooking || existingPendingOrder) {
+    if (existing) {
       return NextResponse.json(
         { message: "Time slot already booked" },
         { status: 409 },
       );
     }
 
+    // Do NOT create the booking yet. Create an Order that carries the booking payload
+    // and only create the actual UserBookings record after payment is confirmed.
+
+    console.log("aku disini");
+
     let userData = null;
+    let doctorData = null;
     try {
-      userData = await User.getUserById(bookingDraft.userId);
+      userData = await User.getUserById(bookingData.userId.toString());
     } catch (e) {
       console.warn("Could not load user data for booking email:", e);
     }
-
-    orderId = `ORDER-${new ObjectId().toString()}`;
-
-    await Order.createOrder({
-      userId: session.user.id,
-      orderId,
-      bookingDraft: {
-        userId: bookingDraft.userId,
-        staffId: bookingDraft.staffId,
-        formBriefId: bookingDraft.formBriefId,
-        date: bookingDraft.date,
-        sessionDuration: bookingDraft.sessionDuration,
-        amount: bookingDraft.amount,
-        type: bookingDraft.type,
-      },
-      items: [
-        {
-          productId: staffId,
-          name: `Consultation ${mapType}`,
-          price: bookingDraft.amount,
-          quantity: 1,
-        },
-      ],
-      totalAmount: bookingDraft.amount,
-      status: "pending",
-      paymentToken: "",
-      customerDetails: {
-        first_name: userData?.name || "User",
-        email: userData?.email || "",
-      },
+    try {
+      doctorData = await User.getUserById(bookingData.staffId.toString());
+    } catch (e) {
+      console.warn("Could not load doctor data for booking email:", e);
+    }
+    const bookingDate = bookingData.date.toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
     });
+    const bookingTime = bookingData.date.toLocaleTimeString("id-ID", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const orderId = `ORDER-${new ObjectId().toString()}`;
 
     const snap = new midtransClient.Snap({
       isProduction: process.env.MIDTRANS_IS_PRODUCTION === "true",
@@ -127,12 +114,12 @@ export async function POST(req: Request) {
     const parameter = {
       transaction_details: {
         order_id: orderId,
-        gross_amount: bookingDraft.amount,
+        gross_amount: bookingData.amount,
       },
       item_details: [
         {
           id: staffId,
-          price: bookingDraft.amount,
+          price: bookingData.amount,
           quantity: 1,
           name: `Consultation ${mapType}`,
         },
@@ -145,23 +132,31 @@ export async function POST(req: Request) {
         secure: true,
       },
       callbacks: {
-        finish: `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/api/payment/finish`,
+        finish: `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/payment/loading?orderId=${orderId}`,
       },
     };
 
     const transaction = await snap.createTransaction(parameter);
+
     if (!transaction.token) {
+      console.error("Midtrans token missing:", transaction);
       throw new Error("Failed to get Midtrans token");
     }
-
-    await db.collection("Orders").updateOne(
-      { orderId },
-      {
-        $set: {
-          paymentToken: transaction.token,
-        },
-      },
-    );
+    console.log("STEP: before insert order");
+    await db.collection("Orders").insertOne({
+      userId: new ObjectId(session.user.id),
+      orderId,
+      // booking will be created after payment confirmation
+      bookingId: null,
+      bookingPayload: bookingData,
+      items: parameter.item_details,
+      totalAmount: bookingData.amount,
+      status: "pending",
+      paymentToken: transaction.token,
+      customerDetails: parameter.customer_details,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
 
     return NextResponse.json(
       {
@@ -174,16 +169,8 @@ export async function POST(req: Request) {
     );
   } catch (error) {
     console.error("Booking Error:", error);
-    const message = error instanceof Error ? error.message : "Internal Server Error";
-    if (orderId) {
-      try {
-        await Order.updateOrderStatus(orderId, "failed");
-      } catch (cleanupError) {
-        console.error("Failed to mark draft order as failed:", cleanupError);
-      }
-    }
     return NextResponse.json(
-      { message },
+      { message: "Internal Server Error" },
       { status: 500 },
     );
   }

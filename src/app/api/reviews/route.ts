@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getDB } from "@/server/config/mongodb";
 import AppReview from "@/server/models/AppReview";
-
+import { ObjectId } from "mongodb";
 // ─── POST /api/reviews  (submit review) ───────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
@@ -37,10 +37,14 @@ export async function POST(req: NextRequest) {
 
     // Pastikan booking ini milik user yang login dan statusnya done
     const db = await getDB();
-    const booking = await db
-      .collection("UserBookings")
-      .findOne({ _id: bookingId, userId, isDone: true });
+    console.log("bookingId:", bookingId);
+    console.log("userId:", userId);
 
+    const booking = await db.collection("UserBookings").findOne({
+      _id: new ObjectId(bookingId),
+      userId: new ObjectId(userId),
+      isDone: true,
+    });
     if (!booking) {
       return NextResponse.json(
         { message: "Booking tidak ditemukan atau belum selesai" },
