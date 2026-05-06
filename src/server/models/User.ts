@@ -3,6 +3,7 @@ import { getDB } from "../config/mongodb";
 import { comparePassword, hashPassword } from "../helpers/bcrypt";
 import { signToken } from "../helpers/jwt";
 import { NotFoundError, UnauthorizedError } from "../helpers/CustomError";
+import { IReview } from "./Review";
 
 
 
@@ -39,6 +40,7 @@ export interface IUser {
         mode?: "online" | "offline" | "online & offline";
         scheduleDays?: string[];
         scheduleTimes?: string[];
+        reviews?: IReview[];
     };
 }
 
@@ -107,11 +109,14 @@ export default class User {
 
     static async getPsychiatristById(id: string): Promise<WithId<IUser> | null> {
         const collection = await this.getCollection();
-        const psychiatrist = await collection.findOne({ _id: new ObjectId(id), role: "psychiatrist" });
-        if (!psychiatrist) {
+        const psychiatrist = await collection.aggregate([
+            { $match: { _id: new ObjectId(id), role: "psychiatrist" } },
+            { $lookup: { from: "Reviews", localField: "_id", foreignField: "staffId", as: "reviews" } }
+        ]).toArray() as WithId<IUser>[];
+        if (!psychiatrist.length) {
             throw new NotFoundError("Psychiatrist not found");
         }
-        return psychiatrist;
+        return psychiatrist[0];
     }
 
     static async createPsychiatristInfo(id: string, info: Partial<IUser["psychiatristInfo"]>): Promise<string> {
