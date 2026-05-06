@@ -35,6 +35,45 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
+## Google Calendar Automation (Full OAuth per User + Doctor)
+
+This project now uses Google OAuth connection for each account (doctor and user), and payment webhook uses those connected calendars.
+
+Flow:
+- Doctor connects Google Calendar in profile.
+- User connects Google Calendar in profile.
+- User books a session and completes payment.
+- Webhook marks booking as paid.
+- Webhook checks busy schedule in both calendars.
+- If both are free, event is created in doctor primary calendar and user is invited.
+
+Required environment variables:
+
+```bash
+AUTH_GOOGLE_ID=
+AUTH_GOOGLE_SECRET=
+GOOGLE_OAUTH_REDIRECT_URI=http://localhost:3000/api/calendar/callback
+GOOGLE_OAUTH_STATE_SECRET=
+GOOGLE_CALENDAR_TIMEZONE=Asia/Jakarta
+```
+
+Google Cloud setup:
+1. Enable Google Calendar API.
+2. Configure OAuth consent screen (internal/external as needed).
+3. Add the exact authorized redirect URI for the site origin you open in the browser, for example `http://localhost:3000/api/calendar/callback` or `http://127.0.0.1:3000/api/calendar/callback`.
+4. Ensure OAuth scopes include Calendar scopes requested by app.
+
+API endpoints:
+- `GET /api/calendar/connect` to generate OAuth URL.
+- `GET /api/calendar/callback` for OAuth callback and token save.
+- `GET /api/calendar/status` to check connection status.
+- `POST /api/calendar/disconnect` to remove saved tokens.
+
+Notes:
+- Sync is idempotent in webhook (existing booking event is not recreated).
+- Payment status remains successful even if calendar sync fails.
+- If either side has not connected Calendar, sync status is marked failed with reason.
+
 
 notes baru for pendengarMu:
 - Doctor QOL:

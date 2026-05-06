@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import UserBooking from "@/server/models/UserBooking";
+import type { BookingWithRelations } from "@/server/models/UserBooking";
 import { ObjectId } from "mongodb";
 
 export async function GET(req: Request) {
@@ -19,7 +20,7 @@ export async function GET(req: Request) {
     if (bookingId) {
       const collection = await UserBooking.getCollection();
       const agg = await collection
-        .aggregate<any>([
+        .aggregate<BookingWithRelations>([
           { $match: { _id: new ObjectId(bookingId) } },
           {
             $lookup: {
@@ -46,6 +47,8 @@ export async function GET(req: Request) {
         type: booking.type,
         isPaid: booking.isPaid,
         isDone: booking.isDone,
+        googleCalendarEventLink: booking.googleCalendarEventLink || null,
+        googleCalendarSyncStatus: booking.googleCalendarSyncStatus || null,
         createdAt: booking.createdAt,
         staffName: booking.staff?.name || "Unknown Doctor",
       };
@@ -80,6 +83,8 @@ export async function GET(req: Request) {
       type: booking.type,
       isPaid: booking.isPaid,
       isDone: booking.isDone,
+      googleCalendarEventLink: booking.googleCalendarEventLink || null,
+      googleCalendarSyncStatus: booking.googleCalendarSyncStatus || null,
       createdAt: booking.createdAt,
       userName: booking.user?.name || "Unknown User",
       staffName: booking.staff?.name || "Unknown Doctor",
