@@ -10,10 +10,11 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { StartSessionButton } from "./StartSessionButton";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 type Booking = {
   _id: string;
+  orderId?: string | null;
   userId: string;
   staffId: string;
   date: string;
@@ -89,10 +90,12 @@ const handlePay = async (bookingId: string) => {
 
 export default function BookingListPage() {
   const { data: session } = useSession();
+  const searchParams = useSearchParams();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [role, setRole] = useState<"USER" | "DOCTOR" | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [paymentSyncLoading, setPaymentSyncLoading] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [paymentFilter, setPaymentFilter] = useState<"ALL" | "PAID" | "UNPAID">(
@@ -103,22 +106,32 @@ export default function BookingListPage() {
   );
 
   const router = useRouter();
+  const paymentState = searchParams.get("payment");
+  const paymentOrderId = searchParams.get("order_id");
+  const recoveringPayment = paymentState === "processing" && !!paymentOrderId;
   const sessionRole = String(session?.user?.role || "").toLowerCase();
   const isPsychiatrist =
     sessionRole === "doctor" || sessionRole === "psychiatrist";
   const isDoctor = role === "DOCTOR";
 
+  const loadBookings = async () => {
+    const response = await fetch("/api/getbookings", { cache: "no-store" });
+    const payload = (await response.json()) as BookingApiResponse;
+    if (!response.ok)
+      throw new Error(payload.message || "Failed to fetch bookings");
+
+    setBookings(payload.data || []);
+    setRole(payload.role || null);
+
+    return payload.data || [];
+  };
+
   useEffect(() => {
     let isMounted = true;
     const fetchBookings = async () => {
       try {
-        const response = await fetch("/api/getbookings", { cache: "no-store" });
-        const payload = (await response.json()) as BookingApiResponse;
-        if (!response.ok)
-          throw new Error(payload.message || "Failed to fetch bookings");
         if (isMounted) {
-          setBookings(payload.data || []);
-          setRole(payload.role || null);
+          await loadBookings();
         }
       } catch (err: unknown) {
         if (isMounted) {
@@ -135,6 +148,42 @@ export default function BookingListPage() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!recoveringPayment) return;
+
+    let isMounted = true;
+    setPaymentSyncLoading(true);
+
+    const pollPaymentStatus = async () => {
+      try {
+        const latestBookings = await loadBookings();
+        const matchedBooking = latestBookings.find(
+          (booking) => booking.orderId === paymentOrderId && booking.isPaid,
+        );
+
+        if (matchedBooking && isMounted) {
+          setPaymentSyncLoading(false);
+          router.replace("/bookinglist");
+        }
+      } catch (err) {
+        if (isMounted) {
+          setError(err instanceof Error ? err.message : "Unexpected error happened");
+          setPaymentSyncLoading(false);
+        }
+      }
+    };
+
+    void pollPaymentStatus();
+    const interval = window.setInterval(() => {
+      void pollPaymentStatus();
+    }, 2000);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(interval);
+    };
+  }, [paymentOrderId, recoveringPayment, router]);
 
   const pageTitle = useMemo(() => {
     return role === "DOCTOR" ? "Daftar Booking Pasien" : "Daftar Booking Saya";
@@ -168,6 +217,32 @@ export default function BookingListPage() {
       return true;
     });
   }, [bookings, searchQuery, paymentFilter, statusFilter, role]);
+
+  if (recoveringPayment && (loading || paymentSyncLoading)) {
+    return (
+      <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,#eff6ff_0%,#f8fafc_45%,#ffffff_100%)] px-4">
+        <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(59,130,246,0.08),rgba(15,23,42,0.03),rgba(14,165,233,0.08))]" />
+        <div className="relative w-full max-w-xl rounded-3xl border border-white/70 bg-white/90 p-8 text-center shadow-[0_20px_60px_rgba(15,23,42,0.12)] backdrop-blur">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full border border-blue-100 bg-blue-50">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" />
+          </div>
+          <p className="text-xs font-bold uppercase tracking-[0.28em] text-blue-600">
+            Payment Processing
+          </p>
+          <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-900">
+            Menyelesaikan pembayaran Anda
+          </h1>
+          <p className="mt-4 text-sm leading-6 text-slate-600">
+            Booking Anda sedang disinkronkan. Halaman ini akan otomatis
+            memperbarui begitu status paid masuk ke database.
+          </p>
+          <div className="mt-6 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700">
+            Mohon tunggu sebentar, kami sedang memeriksa konfirmasi pembayaran.
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <>

@@ -45,10 +45,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           email: credentials.email,
         });
 
-        const user = await usersCollection.findOne({
-          email: credentials.email,
-        });
-
         if (!user) {
           return null;
         }

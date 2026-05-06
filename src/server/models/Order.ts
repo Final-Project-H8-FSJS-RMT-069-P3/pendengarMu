@@ -18,6 +18,15 @@ export interface IOrder {
   userId: string;
   orderId: string;
   bookingId?: string;
+  bookingDraft?: {
+    userId: string;
+    staffId: string;
+    formBriefId?: string | null;
+    date: Date;
+    sessionDuration: number;
+    amount: number;
+    type: "videocall" | "chat-only" | "offline";
+  };
   items: IOrderItem[];
   totalAmount: number;
   status: "pending" | "success" | "failed";
@@ -91,5 +100,19 @@ export default class Order {
     );
 
     return result;
+  }
+
+  static async linkBookingToOrder(orderId: string, bookingId: string) {
+    const collection = await this.getCollection();
+
+    return collection.updateOne(
+      { orderId },
+      {
+        $set: {
+          bookingId,
+          updatedAt: new Date(),
+        },
+      },
+    );
   }
 }
