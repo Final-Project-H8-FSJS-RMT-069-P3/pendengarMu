@@ -97,9 +97,10 @@ export default function BookingListPage() {
   const [clickedLoading, setClickedLoading] = useState<Record<string, boolean>>({});
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [paymentFilter, setPaymentFilter] = useState<"ALL" | "PAID" | "UNPAID">(
-    "ALL",
-  );
+  // Payment filter temporarily disabled — commenting out to remove paid/unpaid filtering
+  // const [paymentFilter, setPaymentFilter] = useState<"ALL" | "PAID" | "UNPAID">(
+  //   "ALL",
+  // );
   const [statusFilter, setStatusFilter] = useState<"ALL" | "DONE" | "UPCOMING">(
     "ALL",
   );
@@ -189,13 +190,14 @@ export default function BookingListPage() {
     return bookings.filter((b) => {
       const name = getDisplayName(b).toLowerCase();
       if (q && !name.includes(q)) return false;
-      if (paymentFilter === "PAID" && !b.isPaid) return false;
-      if (paymentFilter === "UNPAID" && b.isPaid) return false;
+      // payment filter disabled
+      // if (paymentFilter === "PAID" && !b.isPaid) return false;
+      // if (paymentFilter === "UNPAID" && b.isPaid) return false;
       if (statusFilter === "DONE" && !b.isDone) return false;
       if (statusFilter === "UPCOMING" && b.isDone) return false;
       return true;
     });
-  }, [bookings, searchQuery, paymentFilter, statusFilter, role]);
+  }, [bookings, searchQuery, statusFilter, role]);
 
   return (
     <>
@@ -239,28 +241,7 @@ export default function BookingListPage() {
                 />
               </div>
               <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500">Payment</span>
-                  <div className="flex gap-2">
-                    {(["ALL", "PAID", "UNPAID"] as const).map((f) => (
-                      <button
-                        key={f}
-                        onClick={() => setPaymentFilter(f)}
-                        className={`text-xs px-2 py-1 rounded ${
-                          paymentFilter === f
-                            ? f === "PAID"
-                              ? "bg-green-600 text-white"
-                              : f === "UNPAID"
-                                ? "bg-amber-600 text-white"
-                                : "bg-blue-600 text-white"
-                            : "bg-slate-100"
-                        }`}
-                      >
-                        {f === "ALL" ? "All" : f === "PAID" ? "Paid" : "Unpaid"}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                {/* Payment filter removed */}
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-slate-500">Status</span>
                   <div className="flex gap-2">
@@ -281,7 +262,7 @@ export default function BookingListPage() {
                         {f === "ALL"
                           ? "All"
                           : f === "DONE"
-                            ? "Done"
+                            ? "Closed"
                             : "Upcoming"}
                       </button>
                     ))}
@@ -366,7 +347,7 @@ export default function BookingListPage() {
                                   : "bg-green-100 text-green-700"
                               }`}
                             >
-                              {booking.isDone ? "Done" : "Upcoming"}
+                              {booking.isDone ? "Closed" : "Upcoming"}
                             </span>
                           </td>
                           {/* ── Action column: sama untuk user & dokter ── */}

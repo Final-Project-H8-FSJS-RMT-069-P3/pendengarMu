@@ -8,6 +8,8 @@ import {
   createPrimaryCalendarEvent,
   isPrimaryCalendarSlotAvailable,
 } from "@/server/helpers/googleCalendarOAuth";
+import { SendEmail } from "@/server/helpers/sendEmail";
+import { sendWhatsApp } from "@/server/helpers/sendWa";
 
 export async function POST(req: Request) {
   try {
@@ -133,6 +135,100 @@ export async function POST(req: Request) {
         } catch (e) {
           console.error("Failed to set calendar sync failure flag", e);
         }
+      }
+
+      // Send confirmation emails to both patient and doctor
+      try {
+        const finalBooking = await UserBooking.getBookingById(newBookingId.toString());
+        const finalUserData = await User.getUserById(finalBooking.userId.toString());
+        const finalDoctorData = await User.getUserById(finalBooking.staffId.toString());
+
+        if (finalUserData && finalDoctorData && finalBooking) {
+          const bookingDate = new Date(finalBooking.date).toLocaleDateString("id-ID", {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          });
+
+          const bookingTime = new Date(finalBooking.date).toLocaleTimeString("id-ID", {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+
+          const emailPayload = {
+            patientEmail: finalUserData?.email ?? "",
+            doctorEmail: finalDoctorData?.email ?? "",
+            doctorName: finalDoctorData?.name ?? "",
+            patientName: finalUserData?.name ?? "Unknown Patient",
+            patientPhone: finalUserData?.phoneNumber ?? "",
+            patientAddress: finalUserData?.address ?? "",
+            bookingDate: bookingDate,
+            bookingTime: `${bookingTime} WIB`,
+            googleMeetLink: finalBooking.type === "videocall" ? finalBooking.googleMeetLink : undefined,
+          };
+
+          try {
+            void SendEmail({
+              type: "doctor",
+              ...emailPayload,
+            }).catch((err: unknown) => console.error("Failed to send booking email:", err));
+            void SendEmail({
+              type: "patient",
+              ...emailPayload,
+            }).catch((err: unknown) => console.error("Failed to send booking email:", err));
+            console.log("Emails sent for booking:", newBookingId.toString());
+          } catch (emailErr) {
+            console.error("Failed to send booking email:", emailErr);
+          }
+
+          // Send WhatsApp messages
+          if (finalUserData?.phoneNumber) {
+            const waMessage = [
+              "✅ *Booking Confirmed*",
+              "",
+              `Hi ${finalUserData.name},`,
+              "",
+              "Your session has been successfully scheduled:",
+              "",
+              `Doctor : ${finalDoctorData?.name}`,
+              `Date   : ${bookingDate}`,
+              `Time   : ${bookingTime} WIB`,
+              `Session : ${finalBooking.type}`,
+              "",
+              "Please be ready on time 🙌",
+            ].join("\n");
+
+            try {
+              await sendWhatsApp(finalUserData.phoneNumber, waMessage);
+            } catch (err) {
+              console.error("WA patient failed:", err);
+            }
+          }
+
+          if (finalDoctorData?.phoneNumber) {
+            const waMessage = [
+              "📢 *Booking Confirmed*",
+              "",
+              "A booking has been confirmed.",
+              "",
+              `Patient : ${finalUserData?.name}`,
+              `Date    : ${bookingDate}`,
+              `Time    : ${bookingTime} WIB`,
+              `Session : ${finalBooking.type}`,
+              "Status  : *CONFIRMED*",
+              "",
+              "Please prepare accordingly.",
+            ].join("\n");
+
+            try {
+              await sendWhatsApp(finalDoctorData.phoneNumber, waMessage);
+            } catch (err) {
+              console.error("WA doctor failed:", err);
+            }
+          }
+        }
+      } catch (emailErr) {
+        console.error("Confirm: email sending failed", emailErr);
       }
 
       return NextResponse.json({ success: true, bookingId: newBookingId.toString() });

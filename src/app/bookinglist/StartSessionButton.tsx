@@ -5,6 +5,8 @@
 
 "use client";
 
+import Image from "next/image";
+import Swal from "sweetalert2";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -52,7 +54,11 @@ function StartSessionButton({
 
       // Offline session: no live session — show a message
       if (type === "offline") {
-        alert("Offline session — no live room. Check booking details.");
+        await Swal.fire({
+          icon: "info",
+          title: "Offline session",
+          text: "No Google Meet or Chatroom available. Check your Email for booking details",
+        });
         return;
       }
 
@@ -85,7 +91,9 @@ function StartSessionButton({
     ? "💬 Mulai Chat"
     : type === "offline"
     ? "ℹ️ Offline"
-    : "🎥 Mulai Sesi Video";
+    : "Open Gmeet";
+
+  const isGmeetLabel = type !== "chat-only" && type !== "offline";
 
   return (
     <div className="flex flex-col gap-1">
@@ -95,9 +103,22 @@ function StartSessionButton({
           handleStartSession();
         }}
         disabled={loading}
-        className="px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95"
+        className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95"
       >
-        {label}
+        {isGmeetLabel ? (
+          <>
+            <Image
+              src="/uploads/icons8-google-meet-96%20(1).png"
+              alt="Google Meet"
+              width={16}
+              height={16}
+              className="h-4 w-4 shrink-0 brightness-0 invert"
+            />
+            <span>{label}</span>
+          </>
+        ) : (
+          label
+        )}
       </button>
       {error && <p className="text-xs text-red-500">{error}</p>}
     </div>
