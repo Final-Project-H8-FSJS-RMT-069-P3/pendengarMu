@@ -52,8 +52,11 @@ export async function POST(request: NextRequest) {
           { status: 404 },
         );
       }
+      console.log("[WEBHOOK ORDER_ID RAW]", order_id);
 
       const booking = await UserBooking.getBookingById(order.bookingId);
+
+console.log("[WEBHOOK ORDER RESULT]", order);
       console.log("[webhook] Booking retrieved:", { bookingId: order.bookingId, isPaid: booking?.isPaid });
 
       if (!booking) {
