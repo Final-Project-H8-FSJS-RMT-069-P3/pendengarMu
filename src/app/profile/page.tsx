@@ -11,18 +11,10 @@ type PsychiatristInfo = {
   mode?: string;
   speciality?: string[];
   imageUrl?: string;
-  imageId?: string;
   roleSpecialist?: string;
   scheduleDays?: string[];
   scheduleTimes?: string[];
   paket?: { type: "videocall" | "chat-only" | "offline"; price: number }[];
-};
-
-type CalendarConnectionInfo = {
-  connected: boolean;
-  providerEmail: string | null;
-  connectedAt: string | null;
-  updatedAt: string | null;
 };
 
 type UserProfile = {
@@ -32,7 +24,6 @@ type UserProfile = {
   phoneNumber: string;
   address: string;
   psychiatristInfo?: PsychiatristInfo;
-  googleCalendar?: CalendarConnectionInfo;
 };
 
 const DAY_ORDER = [
@@ -71,7 +62,6 @@ export default function ProfileViewPage() {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [calendarLoading, setCalendarLoading] = useState(false);
 
   useEffect(() => {
     async function fetchProfile() {
@@ -87,12 +77,6 @@ export default function ProfileViewPage() {
           phoneNumber: d.phoneNumber || "",
           address: d.address || "",
           psychiatristInfo: d.psychiatristInfo || {},
-          googleCalendar: d.googleCalendar || {
-            connected: false,
-            providerEmail: null,
-            connectedAt: null,
-            updatedAt: null,
-          },
         });
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : String(err));
@@ -142,58 +126,6 @@ export default function ProfileViewPage() {
         .join("")
         .toUpperCase()
     : "?";
-
-  const connectGoogleCalendar = async () => {
-    try {
-      setCalendarLoading(true);
-      const res = await fetch("/api/calendar/connect?returnTo=/profile", {
-        method: "GET",
-      });
-      const data = await res.json();
-
-      if (!res.ok || !data.url) {
-        throw new Error(data.message || "Failed to connect Google Calendar");
-      }
-
-      window.location.href = data.url;
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to connect Google Calendar");
-    } finally {
-      setCalendarLoading(false);
-    }
-  };
-
-  const disconnectGoogleCalendar = async () => {
-    try {
-      setCalendarLoading(true);
-      const res = await fetch("/api/calendar/disconnect", {
-        method: "POST",
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.message || "Failed to disconnect Google Calendar");
-      }
-
-      setProfile((prev) =>
-        prev
-          ? {
-              ...prev,
-              googleCalendar: {
-                connected: false,
-                providerEmail: null,
-                connectedAt: null,
-                updatedAt: null,
-              },
-            }
-          : prev,
-      );
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to disconnect Google Calendar");
-    } finally {
-      setCalendarLoading(false);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-[#f8f9ff] font-sans">
@@ -448,62 +380,6 @@ export default function ProfileViewPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-[2rem] shadow-sm border border-blue-50 px-8 py-6">
-          <h2 className="text-base font-black text-blue-900 uppercase tracking-widest mb-4 flex items-center gap-2">
-            <svg
-              className="w-4 h-4 text-blue-400"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
-            Google Calendar
-          </h2>
-
-          <p className="text-sm text-gray-600 mb-5">
-            Connect your Google account so paid bookings can be validated against your calendar automatically.
-          </p>
-
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                Status
-              </p>
-              <p className="text-sm font-semibold text-gray-800 mt-1">
-                {profile.googleCalendar?.connected
-                  ? `Connected as ${profile.googleCalendar.providerEmail || profile.email}`
-                  : "Not connected"}
-              </p>
-            </div>
-
-            {profile.googleCalendar?.connected ? (
-              <button
-                type="button"
-                onClick={disconnectGoogleCalendar}
-                disabled={calendarLoading}
-                className="px-5 py-2.5 rounded-xl border border-red-200 bg-red-50 text-red-700 font-bold text-sm hover:bg-red-100 disabled:opacity-60"
-              >
-                {calendarLoading ? "Disconnecting..." : "Disconnect"}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={connectGoogleCalendar}
-                disabled={calendarLoading}
-                className="px-5 py-2.5 rounded-xl bg-blue-900 text-white font-bold text-sm hover:bg-blue-800 disabled:opacity-60"
-              >
-                {calendarLoading ? "Connecting..." : "Connect Google Calendar"}
-              </button>
-            )}
-          </div>
-        </div>
-
         {/* ── Psychiatrist Only Sections ───────────────────── */}
         {isPsychiatrist && (
           <>
@@ -598,8 +474,8 @@ export default function ProfileViewPage() {
                         {p.type === "chat-only"
                           ? "Chat"
                           : p.type === "videocall"
-                            ? "Video Call"
-                            : "Offline"}
+                          ? "Video Call"
+                          : "Offline"}
                       </span>
                       <span className="text-lg font-black text-blue-900">
                         {formatRupiah(p.price)}

@@ -4,10 +4,6 @@ import UserBooking from "@/server/models/UserBooking";
 import User from "@/server/models/User";
 import { sendWhatsApp } from "@/server/helpers/sendWa";
 import { SendEmail } from "@/server/helpers/sendEmail";
-import {
-  createPrimaryCalendarEvent,
-  isPrimaryCalendarSlotAvailable,
-} from "@/server/helpers/googleCalendarOAuth";
 
 export async function POST(request: NextRequest) {
   try {
@@ -52,11 +48,8 @@ export async function POST(request: NextRequest) {
           { status: 404 },
         );
       }
-      console.log("[WEBHOOK ORDER_ID RAW]", order_id);
 
-      const booking = await UserBooking.getBookingById(order.bookingId.toString());
-
-console.log("[WEBHOOK ORDER RESULT]", order);
+      const booking = await UserBooking.getBookingById(order.bookingId);
       console.log("[webhook] Booking retrieved:", { bookingId: order.bookingId, isPaid: booking?.isPaid });
 
       if (!booking) {
@@ -67,24 +60,26 @@ console.log("[WEBHOOK ORDER RESULT]", order);
         );
       }
 
-      const wasAlreadyPaid = booking.isPaid;
-
-      if (!wasAlreadyPaid) {
-        console.log("[webhook] Updating booking payment status to true:", order.bookingId);
-        await UserBooking.updateBookingPaymentStatus(
-          order.bookingId.toString(),
-          true,
+      if (booking.isPaid) {
+        console.log("[webhook] Booking already paid, skipping update:", order.bookingId);
+        return NextResponse.json(
+          { message: "Booking already paid" },
+          { status: 200 },
         );
-        console.log("[webhook] Booking payment status updated successfully:", order.bookingId);
-      } else {
-        console.log("[webhook] Booking already paid, skipping payment status update:", order.bookingId);
       }
+
+      console.log("[webhook] Updating booking payment status to true:", order.bookingId);
+      await UserBooking.updateBookingPaymentStatus(
+        order.bookingId.toString(),
+        true,
+      );
+      console.log("[webhook] Booking payment status updated successfully:", order.bookingId);
 
       const userData = await User.getUserById(booking.userId.toString());
       const doctorData = await User.getUserById(booking.staffId.toString());
 
       // Verify the update was successful
-      const updatedBooking = await UserBooking.getBookingById(order.bookingId.toString());
+      const updatedBooking = await UserBooking.getBookingById(order.bookingId);
       if (updatedBooking?.isPaid) {
         console.log("[webhook] ✓ Payment status confirmed in database:", {
           bookingId: order.bookingId,
@@ -94,85 +89,6 @@ console.log("[WEBHOOK ORDER RESULT]", order);
         console.error("[webhook] ✗ Payment status update verification failed:", {
           bookingId: order.bookingId,
           isPaid: updatedBooking?.isPaid,
-        });
-      }
-
-      if (!updatedBooking?.googleCalendarEventId) {
-        await UserBooking.updateBookingCalendarSync(order.bookingId.toString(), {
-          status: "pending",
-        });
-
-        try {
-          const doctorCalendar = doctorData?.googleCalendar;
-          const userCalendar = userData?.googleCalendar;
-
-          if (!doctorCalendar?.refreshToken || !userCalendar?.refreshToken) {
-            throw new Error("Both doctor and user must connect Google Calendar first");
-          }
-
-          const bookingStart = new Date(booking.date);
-          const bookingEnd = new Date(
-            bookingStart.getTime() + Math.max(15, booking.sessionDuration) * 60 * 1000,
-          );
-
-          const doctorSlotAvailable = await isPrimaryCalendarSlotAvailable(
-            doctorCalendar,
-            bookingStart,
-            bookingEnd,
-          );
-
-          const userSlotAvailable = await isPrimaryCalendarSlotAvailable(
-            userCalendar,
-            bookingStart,
-            bookingEnd,
-          );
-
-          if (!doctorSlotAvailable || !userSlotAvailable) {
-            throw new Error(
-              "Google Calendar conflict: selected time is already busy for doctor or patient",
-            );
-          }
-
-          const calendarEvent = await createPrimaryCalendarEvent(doctorCalendar, {
-            bookingId: order.bookingId.toString(),
-            startDate: bookingStart,
-            durationMinutes: booking.sessionDuration,
-            sessionType: booking.type,
-            doctorName: doctorData?.name ?? "Doctor",
-            doctorEmail: doctorData?.email,
-            userName: userData?.name ?? "Patient",
-            userEmail: userData?.email,
-          });
-
-          await UserBooking.updateBookingCalendarSync(order.bookingId.toString(), {
-            eventId: calendarEvent.eventId,
-            eventLink: calendarEvent.eventLink,
-            meetLink: (calendarEvent as any).meetLink,
-            status: "success",
-          });
-
-          console.log("[webhook] Google Calendar synced:", {
-            bookingId: order.bookingId,
-            eventId: calendarEvent.eventId,
-          });
-        } catch (calendarErr: unknown) {
-          const calendarErrorMessage =
-            calendarErr instanceof Error ? calendarErr.message : "Unknown calendar sync error";
-
-          await UserBooking.updateBookingCalendarSync(order.bookingId.toString(), {
-            status: "failed",
-            error: calendarErrorMessage,
-          });
-
-          console.error("[webhook] Google Calendar sync failed:", {
-            bookingId: order.bookingId,
-            error: calendarErrorMessage,
-          });
-        }
-      } else {
-        console.log("[webhook] Calendar event already exists, skipping calendar sync:", {
-          bookingId: order.bookingId,
-          eventId: updatedBooking.googleCalendarEventId,
         });
       }
   
@@ -199,65 +115,63 @@ console.log("[WEBHOOK ORDER RESULT]", order);
         bookingTime: `${bookingTime} WIB`,
       };
 
-      if (!wasAlreadyPaid) {
+      try {
+        void SendEmail({
+          type: "doctor",
+          ...emailPayload,
+        }).catch((err: any) => console.error("Failed to send booking email:", err));
+        void SendEmail({
+          type: "patient",
+          ...emailPayload,
+        }).catch((err: any) => console.error("Failed to send booking email:", err));
+        console.log("Email sent");
+      } catch (emailErr) {
+        console.error("Failed to send booking email:", emailErr);
+      }
+
+      if (userData?.phoneNumber) {
+        const waMessage = [
+          "✅ *Booking Confirmed*",
+          "",
+          `Hi ${userData.name},`,
+          "",
+          "Your session has been successfully scheduled:",
+          "",
+          `Doctor : ${doctorData?.name}`,
+          `Date   : ${bookingDate}`,
+          `Time   : ${bookingTime} WIB`,
+          `Session : ${booking.type}`,
+
+          "",
+          "Please be ready on time 🙌",
+        ].join("\n");
+
         try {
-          void SendEmail({
-            type: "doctor",
-            ...emailPayload,
-          }).catch((err: unknown) => console.error("Failed to send booking email:", err));
-          void SendEmail({
-            type: "patient",
-            ...emailPayload,
-          }).catch((err: unknown) => console.error("Failed to send booking email:", err));
-          console.log("Email sent");
-        } catch (emailErr) {
-          console.error("Failed to send booking email:", emailErr);
+          await sendWhatsApp(userData.phoneNumber, waMessage);
+        } catch (err) {
+          console.error("WA patient failed:", err);
         }
+      }
 
-        if (userData?.phoneNumber) {
-          const waMessage = [
-            "✅ *Booking Confirmed*",
-            "",
-            `Hi ${userData.name},`,
-            "",
-            "Your session has been successfully scheduled:",
-            "",
-            `Doctor : ${doctorData?.name}`,
-            `Date   : ${bookingDate}`,
-            `Time   : ${bookingTime} WIB`,
-            `Session : ${booking.type}`,
+      if (doctorData?.phoneNumber) {
+        const waMessage = [
+          "📢 *Booking Confirmed*",
+          "",
+          "A booking has been confirmed.",
+          "",
+          `Patient : ${userData?.name}`,
+          `Date    : ${bookingDate}`,
+          `Time    : ${bookingTime} WIB`,
+          `Session : ${booking.type}`,
+          "Status  : *CONFIRMED*",
+          "",
+          "Please prepare accordingly.",
+        ].join("\n");
 
-            "",
-            "Please be ready on time 🙌",
-          ].join("\n");
-
-          try {
-            await sendWhatsApp(userData.phoneNumber, waMessage);
-          } catch (err) {
-            console.error("WA patient failed:", err);
-          }
-        }
-
-        if (doctorData?.phoneNumber) {
-          const waMessage = [
-            "📢 *Booking Confirmed*",
-            "",
-            "A booking has been confirmed.",
-            "",
-            `Patient : ${userData?.name}`,
-            `Date    : ${bookingDate}`,
-            `Time    : ${bookingTime} WIB`,
-            `Session : ${booking.type}`,
-            "Status  : *CONFIRMED*",
-            "",
-            "Please prepare accordingly.",
-          ].join("\n");
-
-          try {
-            await sendWhatsApp(doctorData.phoneNumber, waMessage);
-          } catch (err) {
-            console.error("WA patient failed:", err);
-          }
+        try {
+          await sendWhatsApp(doctorData.phoneNumber, waMessage);
+        } catch (err) {
+          console.error("WA patient failed:", err);
         }
       }
     }

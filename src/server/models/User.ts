@@ -6,19 +6,6 @@ import { NotFoundError, UnauthorizedError } from "../helpers/CustomError";
 
 
 
-export interface IUserGoogleCalendar {
-    connected: boolean;
-    provider: "google";
-    providerEmail?: string;
-    accessToken?: string;
-    refreshToken?: string;
-    scope?: string;
-    tokenType?: string;
-    expiryDate?: number;
-    connectedAt?: Date;
-    updatedAt: Date;
-}
-
 export interface IUser {
     _id: ObjectId;
     name: string;
@@ -27,7 +14,6 @@ export interface IUser {
     role: "user" | "psychiatrist";
     phoneNumber: string;
     address: string;
-    googleCalendar?: IUserGoogleCalendar;
     psychiatristInfo?: {
         certificate?: string;
         experience?: number;
@@ -136,40 +122,6 @@ export default class User {
             throw new NotFoundError("User not found");
         }
         return "Psychiatrist info updated successfully";
-    }
-
-    static async updateGoogleCalendarConnection(
-        id: string,
-        payload: Omit<IUserGoogleCalendar, "updatedAt"> & { updatedAt?: Date },
-    ): Promise<string> {
-        const collection = await this.getCollection();
-        const result = await collection.updateOne(
-            { _id: new ObjectId(id) },
-            {
-                $set: {
-                    googleCalendar: {
-                        ...payload,
-                        updatedAt: payload.updatedAt ?? new Date(),
-                    },
-                },
-            }
-        );
-        if (result.matchedCount === 0) {
-            throw new NotFoundError("User not found");
-        }
-        return "Google Calendar connected successfully";
-    }
-
-    static async clearGoogleCalendarConnection(id: string): Promise<string> {
-        const collection = await this.getCollection();
-        const result = await collection.updateOne(
-            { _id: new ObjectId(id) },
-            { $unset: { googleCalendar: "" } }
-        );
-        if (result.matchedCount === 0) {
-            throw new NotFoundError("User not found");
-        }
-        return "Google Calendar disconnected successfully";
     }
     
 }

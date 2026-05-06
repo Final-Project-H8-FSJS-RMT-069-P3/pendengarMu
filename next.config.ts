@@ -1,27 +1,11 @@
-// import type { NextConfig } from "next";
+import type { NextConfig } from "next";
 
-// const nextConfig: NextConfig = {
-//   /* config options here */
-//   reactCompiler: true,
-//   images: {
-//     domains: ["encrypted-tbn0.gstatic.com"],
-//   },
-// };
-
-// export default nextConfig;
-// next.config.js
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+const nextConfig: NextConfig = {
+  /* config options here */
+  reactCompiler: true,
   images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "2qs5yuwadb.ucarecd.net",
-        port: "",
-        pathname: "/**",
-      },
-    ],
+    domains: ['encrypted-tbn0.gstatic.com'],
   },
 };
 
-module.exports = nextConfig;
+export default nextConfig;

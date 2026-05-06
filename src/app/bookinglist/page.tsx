@@ -1,9 +1,4 @@
 "use client";
-declare global {
-  interface Window {
-    snap: any;
-  }
-}
 
 import Navbar from "@/components/navbar";
 import Link from "next/link";
@@ -62,30 +57,6 @@ const formatSessionType = (type?: string) => {
       return "Unknown";
   }
 };
-const handlePay = async (bookingId: string) => {
-  try {
-    const res = await fetch("/api/token-payment", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ bookingId }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) throw new Error(data.message);
-
-    if (window.snap) {
-      window.snap.pay(data.token);
-    } else {
-      alert("Midtrans Snap belum load");
-    }
-  } catch (err) {
-    console.error(err);
-    alert("Gagal memulai pembayaran");
-  }
-};
 
 export default function BookingListPage() {
   const { data: session } = useSession();
@@ -93,15 +64,13 @@ export default function BookingListPage() {
   const [role, setRole] = useState<"USER" | "DOCTOR" | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [clickedDone, setClickedDone] = useState<Record<string, boolean>>({});
-  const [clickedLoading, setClickedLoading] = useState<Record<string, boolean>>({});
 
   const [searchQuery, setSearchQuery] = useState("");
   const [paymentFilter, setPaymentFilter] = useState<"ALL" | "PAID" | "UNPAID">(
-    "ALL",
+    "ALL"
   );
   const [statusFilter, setStatusFilter] = useState<"ALL" | "DONE" | "UPCOMING">(
-    "ALL",
+    "ALL"
   );
 
   const router = useRouter();
@@ -125,7 +94,7 @@ export default function BookingListPage() {
       } catch (err: unknown) {
         if (isMounted) {
           setError(
-            err instanceof Error ? err.message : "Unexpected error happened",
+            err instanceof Error ? err.message : "Unexpected error happened"
           );
         }
       } finally {
@@ -137,32 +106,6 @@ export default function BookingListPage() {
       isMounted = false;
     };
   }, []);
-
-  async function handleMarkDone(bookingId: string, roomName?: string) {
-    try {
-      setClickedDone((s) => ({ ...s, [bookingId]: true }));
-      setClickedLoading((s) => ({ ...s, [bookingId]: true }));
-      const channel = roomName || bookingId;
-      const res = await fetch("/api/video/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "end-room", channelName: channel }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.message || "Failed to mark done");
-      // refresh bookings
-      const resp = await fetch("/api/getbookings", { cache: "no-store" });
-      const payload = await resp.json();
-      if (resp.ok) setBookings(payload.data || []);
-      else console.warn("Failed refresh after mark done", payload);
-      setClickedLoading((s) => ({ ...s, [bookingId]: false }));
-    } catch (err) {
-      console.error(err);
-      setClickedDone((s) => ({ ...s, [bookingId]: false }));
-      setClickedLoading((s) => ({ ...s, [bookingId]: false }));
-      alert("Gagal menandai selesai");
-    }
-  }
 
   const pageTitle = useMemo(() => {
     return role === "DOCTOR" ? "Daftar Booking Pasien" : "Daftar Booking Saya";
@@ -251,8 +194,8 @@ export default function BookingListPage() {
                             ? f === "PAID"
                               ? "bg-green-600 text-white"
                               : f === "UNPAID"
-                                ? "bg-amber-600 text-white"
-                                : "bg-blue-600 text-white"
+                              ? "bg-amber-600 text-white"
+                              : "bg-blue-600 text-white"
                             : "bg-slate-100"
                         }`}
                       >
@@ -273,16 +216,16 @@ export default function BookingListPage() {
                             ? f === "DONE"
                               ? "bg-green-600 text-white"
                               : f === "UPCOMING"
-                                ? "bg-amber-600 text-white"
-                                : "bg-blue-600 text-white"
+                              ? "bg-amber-600 text-white"
+                              : "bg-blue-600 text-white"
                             : "bg-slate-100"
                         }`}
                       >
                         {f === "ALL"
                           ? "All"
                           : f === "DONE"
-                            ? "Done"
-                            : "Upcoming"}
+                          ? "Done"
+                          : "Upcoming"}
                       </button>
                     ))}
                   </div>
@@ -374,12 +317,12 @@ export default function BookingListPage() {
                             <div className="flex items-center gap-2">
                               {/* Pay Now — hanya untuk user yang belum bayar */}
                               {!isPsychiatrist && !booking.isPaid && (
-                                <button
-                                  onClick={() => handlePay(booking._id)}
+                                <Link
+                                  href={`/payment?bookingId=${booking._id}`}
                                   className="text-xs px-3 py-1.5 bg-orange-50 text-orange-600 font-semibold rounded-lg hover:bg-orange-100 transition-colors whitespace-nowrap border border-orange-200"
                                 >
                                   Pay Now
-                                </button>
+                                </Link>
                               )}
                               {/* Start Session — sudah bayar, belum selesai */}
 
@@ -394,56 +337,16 @@ export default function BookingListPage() {
                                   Brief
                                 </button>
                               )}
-                              {/* Done button - both roles can mark done */}
-                              {!booking.isDone && (
-                                <button
-                                  onClick={() => handleMarkDone(booking._id)}
-                                  disabled={!!clickedDone[booking._id]}
-                                  className={`text-xs px-3 py-1.5 font-semibold rounded-lg transition-colors whitespace-nowrap border ${
-                                    clickedDone[booking._id]
-                                      ? "bg-slate-100 text-slate-600 border-slate-200 cursor-not-allowed"
-                                      : "bg-green-50 text-green-700 border-green-100 hover:bg-green-100"
-                                  }`}
-                                >
-                                  {clickedLoading[booking._id] ? (
-                                    <span className="inline-flex items-center">
-                                      <svg
-                                        className="animate-spin h-4 w-4 mr-2 text-slate-600"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                      >
-                                        <circle
-                                          className="opacity-25"
-                                          cx="12"
-                                          cy="12"
-                                          r="10"
-                                          stroke="currentColor"
-                                          strokeWidth="4"
-                                        ></circle>
-                                        <path
-                                          className="opacity-75"
-                                          fill="currentColor"
-                                          d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                                        ></path>
-                                      </svg>
-                                      Done
-                                    </span>
-                                  ) : (
-                                    "Done"
-                                  )}
-                                </button>
-                              )}
                             </div>
                           </td>
-                            <div className="px-4 py-3">
-                              {booking.isPaid && !booking.isDone && (
-                                <StartSessionButton
-                                  bookingId={booking._id}
-                                  type={booking.type}
-                                />
-                              )}
-                            </div>
+                          <div className="px-4 py-3">
+                            {booking.isPaid && !booking.isDone && (
+                              <StartSessionButton
+                                bookingId={booking._id}
+                                type={booking.type}
+                              />
+                            )}
+                          </div>
                         </tr>
                       ))
                     )}
@@ -532,12 +435,12 @@ export default function BookingListPage() {
                       <div className="flex items-center gap-2">
                         {/* Pay Now — user yang belum bayar */}
                         {!isPsychiatrist && !booking.isPaid && (
-                          <button
-                            onClick={() => handlePay(booking._id)}
+                          <Link
+                            href={`/payment?bookingId=${booking._id}`}
                             className="flex-1 text-center text-xs px-4 py-3 bg-orange-50 text-orange-600 font-black rounded-xl border border-orange-200 hover:bg-orange-100 transition-all active:scale-95"
                           >
                             Pay Now
-                          </button>
+                          </Link>
                         )}
                         {/* Start Session */}
                         {booking.isPaid && !booking.isDone && (
@@ -557,45 +460,6 @@ export default function BookingListPage() {
                             className="flex-1 text-xs px-4 py-3 bg-blue-50 text-blue-700 font-black rounded-xl border border-blue-100 hover:bg-blue-100 transition-all active:scale-95"
                           >
                             Lihat Brief
-                          </button>
-                        )}
-                        {!booking.isDone && (
-                          <button
-                            onClick={() => handleMarkDone(booking._id)}
-                            disabled={!!clickedDone[booking._id]}
-                            className={`flex-1 text-xs px-4 py-3 font-black rounded-xl border transition-all active:scale-95 ${
-                              clickedDone[booking._id]
-                                ? "bg-slate-100 text-slate-600 border-slate-200 cursor-not-allowed"
-                                : "bg-green-50 text-green-700 border-green-100 hover:bg-green-100"
-                            }`}
-                          >
-                            {clickedLoading[booking._id] ? (
-                              <span className="inline-flex items-center justify-center">
-                                <svg
-                                  className="animate-spin h-4 w-4 mr-2 text-slate-600"
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  fill="none"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <circle
-                                    className="opacity-25"
-                                    cx="12"
-                                    cy="12"
-                                    r="10"
-                                    stroke="currentColor"
-                                    strokeWidth="4"
-                                  ></circle>
-                                  <path
-                                    className="opacity-75"
-                                    fill="currentColor"
-                                    d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                                  ></path>
-                                </svg>
-                                Done
-                              </span>
-                            ) : (
-                              "Done"
-                            )}
                           </button>
                         )}
                       </div>
