@@ -100,7 +100,7 @@ export function EmailTemplate(props: EmailTemplateProps) {
       <p>
         Regards,
         <br />
-        Your System
+        PendengarMu Team
       </p>
 
       <p style={{ fontSize: 12, color: "#666", marginTop: 30 }}>
