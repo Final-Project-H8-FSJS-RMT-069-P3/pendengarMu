@@ -187,7 +187,7 @@ export async function createPrimaryCalendarEvent(
   if (isValidEmail(input.userEmail)) attendees.push({ email: input.userEmail });
   if (isValidEmail(input.doctorEmail)) attendees.push({ email: input.doctorEmail });
 
-  const conferenceDataVersion = input.sessionType === "offline" ? 0 : 1;
+  const conferenceDataVersion = input.sessionType === "videocall" ? 1 : 0;
 
   const event = await calendar.events.insert({
     calendarId: "primary",
@@ -210,14 +210,14 @@ export async function createPrimaryCalendarEvent(
       },
       attendees,
       conferenceData:
-        input.sessionType === "offline"
-          ? undefined
-          : {
+        input.sessionType === "videocall"
+          ? {
               createRequest: {
                 requestId: `booking-${input.bookingId}-${Date.now()}`,
                 conferenceSolutionKey: { type: "hangoutsMeet" },
               },
-            },
+            }
+          : undefined,
     },
   });
 
@@ -225,8 +225,15 @@ export async function createPrimaryCalendarEvent(
     throw new Error("Google Calendar event created without id/link");
   }
 
+  // Try to find a Meet link from known fields
+  const hangoutLink = (event.data as any).hangoutLink as string | undefined;
+  const entryPoints = (event.data as any).conferenceData?.entryPoints as Array<any> | undefined;
+  const meetEntry = entryPoints?.find((ep) => ep.entryPointType === "video" || ep.entryPointType === "more") || entryPoints?.[0];
+  const meetLink = hangoutLink || meetEntry?.uri || undefined;
+
   return {
     eventId: event.data.id,
     eventLink: event.data.htmlLink,
+    meetLink,
   };
 }

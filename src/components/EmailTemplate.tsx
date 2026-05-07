@@ -12,6 +12,7 @@ export interface EmailTemplateProps {
   bookingTime?: string;
   priceTier?: string;
   notes?: string;
+  googleMeetLink?: string;
 }
 
 export function EmailTemplate(props: EmailTemplateProps) {
@@ -26,6 +27,7 @@ export function EmailTemplate(props: EmailTemplateProps) {
     bookingTime,
     priceTier,
     notes,
+    googleMeetLink,
   } = props;
   const isDoctor = type === "doctor";
 
@@ -72,6 +74,17 @@ export function EmailTemplate(props: EmailTemplateProps) {
         Price&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: {priceTier ?? "Standard"}
       </p>
 
+      {/* Google Meet Link */}
+      {googleMeetLink && (
+        <p>
+          <strong>Video Call Link</strong>
+          <br />
+          <a href={googleMeetLink} style={{ color: "#0066cc", textDecoration: "none" }}>
+            {googleMeetLink}
+          </a>
+        </p>
+      )}
+
       {/* Notes */}
       {notes && (
         <p>
@@ -87,7 +100,7 @@ export function EmailTemplate(props: EmailTemplateProps) {
       <p>
         Regards,
         <br />
-        Your System
+        PendengarMu Team
       </p>
 
       <p style={{ fontSize: 12, color: "#666", marginTop: 30 }}>
